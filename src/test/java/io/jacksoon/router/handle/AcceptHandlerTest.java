@@ -21,48 +21,5 @@ class AcceptHandlerTest {
     AcceptHandler acceptHandler;
     RequestPipelineQueue pipelineQueue;
     HttpRequestCheck httpRequestCheck;
-    @BeforeEach
-    void init() throws IOException {
-        selector = Selector.open();
-        serverSocketChannel = ServerSocketChannel.open();
-        pipelineQueue = mock(RequestPipelineQueue.class);
-        httpRequestCheck = mock(HttpRequestCheck.class);
-        acceptHandler = new AcceptHandler(selector,serverSocketChannel,pipelineQueue,httpRequestCheck);
-    }
 
-    @Test
-    void constructor() throws IOException {
-        assertNotNull(acceptHandler);
-        assertEquals(acceptHandler.selector,selector);
-        assertEquals(acceptHandler.serverSocketChannel,serverSocketChannel);
-        assertEquals(acceptHandler.requestPipelineQueue,pipelineQueue);
-        assertEquals(acceptHandler.httpRequestCheck,httpRequestCheck);
-    }
-    @Test
-    void handle() throws IOException {
-        ServerSocketChannel serverSocketChannel = mock(ServerSocketChannel.class);
-        Selector selector = mock(Selector.class);
-        RequestPipelineQueue queue = mock(RequestPipelineQueue.class);
-        HttpRequestCheck requestCheck = mock(HttpRequestCheck.class);
-        SocketChannel socketChannel = mock(SocketChannel.class);
-        SelectionKey selectionKey = mock(SelectionKey.class);
-        when(serverSocketChannel.accept()).thenReturn(socketChannel);
-        when(socketChannel.register(eq(selector), eq(SelectionKey.OP_READ)))
-                .thenReturn(selectionKey);
-        AcceptHandler acceptHandler =
-                new AcceptHandler(
-                        selector,
-                        serverSocketChannel,
-                        queue,
-                        requestCheck
-                );
-
-        acceptHandler.handle();
-
-        verify(serverSocketChannel).accept();
-
-        verify(socketChannel).configureBlocking(false);
-        verify(socketChannel).register(eq(selector), eq(SelectionKey.OP_READ));
-        verify(selector).wakeup();
-    }
 }

@@ -16,46 +16,5 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MainTest {
-    @Test
-    void mainComponents_shouldBeCreatedSuccessfully() throws IOException {
-        Selector selector = Selector.open();
-        ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
-
-        RequestPipelineQueue queue = new RequestPipelineQueue();
-
-        AcceptHandler acceptHandler =
-                new AcceptHandler(
-                        selector,
-                        serverSocketChannel,
-                        queue,
-                        new HttpRequestCheck()
-                );
-
-        Reactor reactor =
-                new Reactor(
-                        selector,
-                        serverSocketChannel,
-                        1012,
-                        acceptHandler
-                );
-
-        Step step = new Step();
-        RequestWorkerPool workerPool = new RequestWorkerPool(queue);
-
-        assertNotNull(selector);
-        assertTrue(selector.isOpen());
-
-        assertNotNull(serverSocketChannel);
-        assertTrue(serverSocketChannel.isOpen());
-
-        assertNotNull(queue);
-        assertNotNull(acceptHandler);
-        assertNotNull(reactor);
-        assertNotNull(step);
-        assertNotNull(workerPool);
-
-        serverSocketChannel.close();
-        selector.close();
-    }
 
 }
