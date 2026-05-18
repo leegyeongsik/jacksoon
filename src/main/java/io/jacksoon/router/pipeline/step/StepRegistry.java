@@ -1,11 +1,14 @@
-package io.jacksoon.router.pipeline;
+package io.jacksoon.router.pipeline.step;
+
+import io.jacksoon.router.pipeline.executor.PipeLineExecutor;
+import io.jacksoon.router.pipeline.executor.paser.HttpParse;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public class StepRegistry {
     Map<String,Object[]> current = new HashMap<>();
-    StepRegistry(){
+    public StepRegistry(){
         // read -> event
         // read일때 event에 던지고
         // 얘 싱글톤이니까
@@ -29,6 +32,7 @@ public class StepRegistry {
         // 그리고 맨 처음에 만들어진 read write 스텝을 파이프라인 첫단계에 넣어줌 그러면 처음에 read가 호출되면 처음에 read를 실행하고 다음 뎁스로 객체를 바꿔줌 그래서 그걸로 또 그거실행
 
         // 그냥 name으로 현재 호출하고 다음꺼 바꿔주자
+        this.put("READ",new HttpParse(),null);
     }
 
     public PipeLineExecutor getPipeLineExecutor(String event) {

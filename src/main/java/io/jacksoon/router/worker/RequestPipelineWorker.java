@@ -1,6 +1,6 @@
 package io.jacksoon.router.worker;
 
-import io.jacksoon.router.pipeline.PipelineContext;
+import io.jacksoon.router.pipeline.context.PipelineContext;
 import io.jacksoon.router.worker.thread.Executor;
 import io.jacksoon.router.worker.thread.RequestPipelineQueue;
 

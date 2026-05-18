@@ -1,5 +1,7 @@
 package io.jacksoon.router.handle;
 
+import io.jacksoon.router.help.ConnectionContext;
+import io.jacksoon.router.help.HttpRequestCheck;
 import io.jacksoon.router.worker.thread.RequestPipelineQueue;
 
 import java.io.IOException;
@@ -11,10 +13,12 @@ public class AcceptHandler implements Handler {
     final Selector selector;
     final ServerSocketChannel serverSocketChannel;
     final RequestPipelineQueue requestPipelineQueue;
-    public AcceptHandler(Selector selector, ServerSocketChannel serverSocketChannel, RequestPipelineQueue requestPipelineQueue) {
+    final HttpRequestCheck httpRequestCheck;
+    public AcceptHandler(Selector selector, ServerSocketChannel serverSocketChannel, RequestPipelineQueue requestPipelineQueue , HttpRequestCheck httpRequestCheck) {
         this.selector = selector;
         this.serverSocketChannel = serverSocketChannel;
         this.requestPipelineQueue = requestPipelineQueue;
+        this.httpRequestCheck = httpRequestCheck;
     }
 
     @Override
@@ -30,7 +34,7 @@ public class AcceptHandler implements Handler {
             // 그래서 채널이 null일수있는 이유가 accpet해서 queue에 쌓여있는게 없으면 null이고 있으면 클라이언트 소켓이 옴
             // 그 소켓을 다시 채널에 등록  new EchoHandler(writeGo,selector, socketChannel);
             if (socketChannel != null) {
-                new IOHandler(requestPipelineQueue,selector, socketChannel);
+                new IOHandler(requestPipelineQueue,selector, socketChannel,httpRequestCheck,new ConnectionContext());
             }
         } catch (IOException ex) {
             ex.printStackTrace();
