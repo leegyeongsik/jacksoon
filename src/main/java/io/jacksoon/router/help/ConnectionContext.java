@@ -1,15 +1,11 @@
 package io.jacksoon.router.help;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.nio.ByteBuffer;
 
+@Getter
+@Setter
 public class ConnectionContext {
-
     private ByteBuffer requestBuffer = ByteBuffer.allocate(8 * 1024);
-
-    public ByteBuffer getRequestBuffer() {
-        return requestBuffer;
-    }
-
-    public void setRequestBuffer(ByteBuffer requestBuffer) {
-        this.requestBuffer = requestBuffer;
-    }
 }
