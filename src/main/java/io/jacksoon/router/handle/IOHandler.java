@@ -21,10 +21,7 @@ public class IOHandler implements Handler {
     final ByteBuffer readBuffer = ByteBuffer.allocate(256);
     final RequestCheck requestCheck;
     final ConnectionContext connectionContext;
-    final Step step = new Step(); // 스텝 여기서 new 해주면안대고 넘겨줘야댐 싱글톤으로 하던가 하면될거같고 그랬을때 스텝만들때 레지스트리도 주입
-    // 뒤에서부터 주입시키고 앞에꺼 완성하는식으로 하자 빈마냥 재귀적으로 가서
-    // 아마 차례대로 드가서 필요한거 생성자 파라미터 찾은다음에 끝까지 찾고 리턴떄려서 채워주고 넣고 그런식으로 가겠지?
-    // 싱글톤으로
+    final Step step = new Step();
     int state = READING;
     final RequestPipelineQueue requestPipelineQueue;
 
