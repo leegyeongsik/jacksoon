@@ -7,10 +7,9 @@ import io.jacksoon.router.pipeline.executor.Depth;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+
 @Init
 public class HttpParse implements Depth {
-
-
     @Override
     public void dodo(PipelineContext context) {
 

@@ -2,36 +2,29 @@ package io.jacksoon.router.pipeline.step;
 
 import io.jacksoon.router.pipeline.context.PipelineContext;
 import io.jacksoon.router.pipeline.executor.PipeLineExecutor;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class StepTest {
 
     @Test
-    void shouldExecuteCurrentEventExecutorAndReturnNextEvent() {
+    void executesCurrentEventExecutorAndReturnsNextEvent() {
         PipelineContext context = mock(PipelineContext.class);
         PipeLineExecutor executor = mock(PipeLineExecutor.class);
         StepRegistry stepRegistry = mock(StepRegistry.class);
+        Step step = new Step(stepRegistry);
 
-        String currentEvent = "PARSE";
-        String nextEvent = "ROUTE";
+        when(context.getEvent()).thenReturn("parse");
+        when(stepRegistry.getPipeLineExecutor("parse")).thenReturn(executor);
+        when(stepRegistry.getPipelineStep("parse")).thenReturn("router");
 
-        when(context.getEvent()).thenReturn(currentEvent);
-        when(stepRegistry.getPipeLineExecutor(currentEvent))
-                .thenReturn(executor);
-        when(stepRegistry.getPipelineStep(currentEvent))
-                .thenReturn(nextEvent);
+        String result = step.next(context);
 
-//        Step step = new Step();
-//        step.stepRegistry = stepRegistry;
-//
-//        String result = step.next(context);
-//        verify(stepRegistry).getPipeLineExecutor(currentEvent);
-//        verify(executor).executor(context);
-//        verify(stepRegistry).getPipelineStep(currentEvent);
-//
-//        assertEquals(nextEvent, result);
+        verify(stepRegistry).getPipeLineExecutor("parse");
+        verify(executor).executor(context);
+        verify(stepRegistry).getPipelineStep("parse");
+        Assertions.assertEquals("router", result);
     }
 }

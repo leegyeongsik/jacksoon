@@ -1,99 +1,121 @@
-//package io.jacksoon.router.pipeline.executor.paser;
-//
-//import io.jacksoon.router.pipeline.context.PipelineContext;
-//import io.jacksoon.router.pipeline.context.RouterRequest;
-//import org.junit.jupiter.api.Test;
-//
-//import java.nio.ByteBuffer;
-//import java.util.HashMap;
-//
-//import static org.junit.jupiter.api.Assertions.*;
-//import static org.mockito.Mockito.*;
-//
-//class HttpParseTest {
-//    @Test
-//    void parse_HTTP() {
-//        String request =
-//                "GET /hello HTTP/1.1\r\n" +
-//                        "Host: localhost\r\n" +
-//                        "Content-Type: text/plain\r\n" +
-//                        "\r\n" +
-//                        "body";
-//
-//        byte[] bytes = request.getBytes();
-//        ByteBuffer buffer = ByteBuffer.allocate(1024);
-//        buffer.put(bytes);
-//        buffer.flip();
-//
-//        RouterRequest routerRequest = mock(RouterRequest.class);
-//        when(routerRequest.getHeaders()).thenReturn(new HashMap<>());
-//
-//        PipelineContext context = mock(PipelineContext.class);
-//        when(context.getRequest()).thenReturn(routerRequest);
-//        when(context.getByteBuffer()).thenReturn(buffer);
-//        when(context.getByteBufferIndex()).thenReturn(
-//                request.indexOf("\r\n\r\n") + 4
-//        );
-//
-//        HttpParse parser = new HttpParse();
-//
-//        parser.parse(context);
-//
-//        verify(routerRequest).setMethod("GET");
-//        verify(routerRequest).setPath("/hello");
-//        verify(routerRequest).setVersion("HTTP/1.1");
-//
-//        assertEquals("localhost",
-//                routerRequest.getHeaders().get("Host"));
-//        assertEquals("text/plain",
-//                routerRequest.getHeaders().get("Content-Type"));
-//
-//        verify(context).setByteBufferIndex(4);
-//
-//        assertEquals(0, buffer.position());
-//        assertEquals(4, buffer.limit());
-//    }
-//
-//    @Test
-//    void parse_throw() {
-//        ByteBuffer buffer = ByteBuffer.allocate(10);
-//
-//        RouterRequest routerRequest = mock(RouterRequest.class);
-//        when(routerRequest.getHeaders()).thenReturn(new HashMap<>());
-//
-//        PipelineContext context = mock(PipelineContext.class);
-//        when(context.getRequest()).thenReturn(routerRequest);
-//        when(context.getByteBuffer()).thenReturn(buffer);
-//        when(context.getByteBufferIndex()).thenReturn(0);
-//
-//        HttpParse parser = new HttpParse();
-//
-//        assertThrows(IllegalArgumentException.class,
-//                () -> parser.parse(context));
-//    }
-//
-//    @Test
-//    void parse_wrong_throw() {
-//        String request = "GET /hello\r\n\r\n";
-//
-//        ByteBuffer buffer = ByteBuffer.allocate(1024);
-//        buffer.put(request.getBytes());
-//        buffer.flip();
-//
-//        RouterRequest routerRequest = mock(RouterRequest.class);
-//        when(routerRequest.getHeaders()).thenReturn(new HashMap<>());
-//
-//        PipelineContext context = mock(PipelineContext.class);
-//        when(context.getRequest()).thenReturn(routerRequest);
-//        when(context.getByteBuffer()).thenReturn(buffer);
-//        when(context.getByteBufferIndex()).thenReturn(
-//                request.indexOf("\r\n\r\n") + 4
-//        );
-//
-//        HttpParse parser = new HttpParse();
-//
-//        assertThrows(IllegalArgumentException.class,
-//                () -> parser.parse(context));
-//    }
-//
-//}
+package io.jacksoon.router.pipeline.executor.paser;
+
+import io.jacksoon.router.help.BufferContext;
+import io.jacksoon.router.pipeline.context.PipelineContext;
+import io.jacksoon.router.pipeline.context.RouterRequest;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+
+class HttpParseTest {
+
+    private final HttpParse parser = new HttpParse();
+
+    @Test
+    void parsesRequestLineAndHeaders() {
+        String request =
+                "GET /hello?name=router HTTP/1.1\r\n" +
+                        "Host: localhost\r\n" +
+                        "Content-Type: text/plain\r\n" +
+                        "\r\n" +
+                        "body";
+        ByteBuffer buffer = buffer(request);
+        PipelineContext context = context(buffer, headerLength(request));
+
+        parser.dodo(context);
+
+        RouterRequest routerRequest = context.getRequest();
+        Assertions.assertEquals("GET", routerRequest.getMethod());
+        Assertions.assertEquals("/hello?name=router", routerRequest.getPath());
+        Assertions.assertEquals("HTTP/1.1", routerRequest.getVersion());
+        Assertions.assertEquals("localhost", routerRequest.getHeaders().get("Host"));
+        Assertions.assertEquals("text/plain", routerRequest.getHeaders().get("Content-Type"));
+    }
+
+    @Test
+    void keepsOriginalBufferPositionAndLimit() {
+        String request =
+                "POST /users HTTP/1.1\r\n" +
+                        "Host: localhost\r\n" +
+                        "Content-Length: 5\r\n" +
+                        "\r\n" +
+                        "hello";
+        ByteBuffer buffer = buffer(request);
+        int originalPosition = buffer.position();
+        int originalLimit = buffer.limit();
+        PipelineContext context = context(buffer, headerLength(request));
+
+        parser.dodo(context);
+
+        Assertions.assertEquals(originalPosition, buffer.position());
+        Assertions.assertEquals(originalLimit, buffer.limit());
+    }
+
+    @Test
+    void trimsHeaderNameAndValue() {
+        String request =
+                "GET / HTTP/1.1\r\n" +
+                        "Host:   localhost   \r\n" +
+                        "X-Test :  value  \r\n" +
+                        "\r\n";
+        PipelineContext context = context(buffer(request), headerLength(request));
+
+        parser.dodo(context);
+
+        Assertions.assertEquals("localhost", context.getRequest().getHeaders().get("Host"));
+        Assertions.assertEquals("value", context.getRequest().getHeaders().get("X-Test"));
+    }
+
+    @Test
+    void ignoresMalformedHeaderLine() {
+        String request =
+                "GET / HTTP/1.1\r\n" +
+                        "Host: localhost\r\n" +
+                        "wrong-header-line\r\n" +
+                        "\r\n";
+        PipelineContext context = context(buffer(request), headerLength(request));
+
+        parser.dodo(context);
+
+        Assertions.assertEquals("localhost", context.getRequest().getHeaders().get("Host"));
+        Assertions.assertFalse(context.getRequest().getHeaders().containsKey("wrong-header-line"));
+    }
+
+    @Test
+    void throwsExceptionWhenRequestLineIsInvalid() {
+        String request = "GET /hello\r\n\r\n";
+        PipelineContext context = context(buffer(request), headerLength(request));
+
+        Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> parser.dodo(context)
+        );
+    }
+
+    @Test
+    void currentAndNextEventAreCorrect() {
+        Assertions.assertEquals("parse", parser.currentEvent());
+        Assertions.assertEquals("router", parser.nextEvent());
+    }
+
+    private PipelineContext context(ByteBuffer buffer, int headerLength) {
+        return new PipelineContext(
+                null,
+                "parse",
+                buffer,
+                headerLength,
+                new BufferContext(),
+                null
+        );
+    }
+
+    private ByteBuffer buffer(String text) {
+        return ByteBuffer.wrap(text.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    private int headerLength(String httpMessage) {
+        return httpMessage.indexOf("\r\n\r\n") + 4;
+    }
+}
