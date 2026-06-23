@@ -47,7 +47,7 @@ public class TypeMetadataParser {
                 for (Type b : tv.getBounds()) {
                     bounds.add(parse(b));
                 }
-                vars.add(new TypeMetadata(tv, null, bounds, false, List.of()));
+                vars.add(new TypeMetadata(tv, null, List.of(), false, bounds));
             }
 
             return new TypeMetadata(type, clazz, vars, false, List.of());
