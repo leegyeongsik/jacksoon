@@ -1,8 +1,10 @@
 package io.jacksoon.router.help;
 
+import io.jacksoon.router.init.annotation.Init;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-
+@Init
 public class HttpRequestCheck implements RequestCheck {
 
     private static final int MAX_HEADER_SIZE = 16 * 1024;
