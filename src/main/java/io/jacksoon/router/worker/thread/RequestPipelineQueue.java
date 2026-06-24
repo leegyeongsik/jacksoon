@@ -6,7 +6,7 @@ import io.jacksoon.router.pipeline.context.PipelineContext;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 @Init
-public class RequestPipelineQueue { // 이거 그냥 제네릭으로 일반화할까
+public class RequestPipelineQueue {
     BlockingQueue<PipelineContext> requestPipelineQueue = new LinkedBlockingQueue();
 
     public PipelineContext take() throws InterruptedException {

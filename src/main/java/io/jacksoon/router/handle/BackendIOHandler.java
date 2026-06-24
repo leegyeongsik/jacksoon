@@ -24,9 +24,8 @@ public class BackendIOHandler implements Handler {
     private final RequestBackendQueue requestQueue;
     private final ResponseBackendQueue responseQueue;
     private final HttpResponseCheck responseCheck;
-    final RequestPipelineQueue requestPipelineQueue;    // 그러면 키랑 requestQueue랑 커넥션풀 구성하고 router에서 찾으면 큐에 컨텍스트 생성해서 넣고 키 상태 write로 바꿔놓음
-    // 백엔드부분도 파이프라인 구성해서 read온거 파이프라인 타게해서 최종적으로 클라이언트 리액터 큐에 들어가게끔
-    private ProxyContext currentWriteContext; // 그때 파이프라인 컨텍스트 만들고 파이프라인 시작하고 -> creactor큐에 들어가면 끝
+    final RequestPipelineQueue requestPipelineQueue;
+    private ProxyContext currentWriteContext;
 
     public BackendIOHandler(Selector selector, SocketChannel socketChannel, ResponseBackendQueue responseBackendQueue, RequestBackendQueue requestBackendQueue, RequestPipelineQueue requestPipelineQueue, HttpResponseCheck responseCheck) {
         this.socketChannel = socketChannel;

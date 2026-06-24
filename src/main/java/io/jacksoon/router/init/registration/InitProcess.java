@@ -18,7 +18,7 @@ public class InitProcess {
 
     private static Object resolveByType(TypeMetadata metadata) {
         Class<?> raw = metadata.getRawType();
-        if (raw == List.class) { // resolvelist로 빠져도되고
+        if (raw == List.class) {
             TypeMetadata child = metadata.getActualTypeArguments().isEmpty() ?
                     new TypeMetadata(Object.class, Object.class, List.of(), false, List.of()) :
                     metadata.getActualTypeArguments().get(0);
@@ -50,18 +50,14 @@ public class InitProcess {
         }
         return TypeUtils.selectBestCandidate(metadata, confirmed).getInitMetadata().createInstance().getObject();
     }
-
-
     private static Object resolveByName(TypeMetadata metadata, String name) {
         InitInstance instance = InitFactory.getInitInstance(name);
         if (instance == null) {
-            throw new RuntimeException(
-                    "No bean named '" + name + "'"
-            );
+            throw new RuntimeException();
         }
         TypeMetadata candidate = instance.getInitMetadata().getTypeMetadata();
         if (!match(candidate, metadata)) {
-            throw new RuntimeException("Bean '" + name + "' type mismatch");
+            throw new RuntimeException();
         }
         return instance.getInitMetadata().createInstance().getObject();
     }

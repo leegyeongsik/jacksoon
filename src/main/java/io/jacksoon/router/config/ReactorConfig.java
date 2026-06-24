@@ -45,17 +45,6 @@ public class ReactorConfig {
 
     @Init("backendReactor")
     public Reactor backendReactor(@Init("backendSelector") Selector selector) throws Exception {
-        return new Reactor(selector);
-        // 여기서 라우터에서 레지스트리 찾아서 리액트큐에 집어넣음
-        // 리액트큐에서 커넥션핸들러로 객체 생성함 그리고 엔드포인트소켓채널 연결함
-        // write모드로 바꾸고
-        // 걔가 데이터 보냄
-        // 그리고 read모드로 변경
-        // 그 엔드포인트소켓채널에서 read가 오면 처리해서 clientreactor큐에 넣음
-        // 해당 소켓의 상태를 write로 바꿈
-        // 꺼낼때 해당 버퍼큐에 데이터 넣음
-        // write
-        // 레지스트리는 그냥 스프링하나 만들어서 A요청받으면 그거 타도록 하나 임시로
-    }
+        return new Reactor(selector);}
 
 }

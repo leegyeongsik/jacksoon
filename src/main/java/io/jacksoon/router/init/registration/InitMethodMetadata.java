@@ -30,11 +30,8 @@ public class InitMethodMetadata extends InitMetadata {
         Type[] genericParams = method.getGenericParameterTypes();
         Class<?>[] rawParams = method.getParameterTypes();
         Object[] args = new Object[rawParams.length];
-
         for (int i = 0; i < args.length; i++) {
-
             String paramName = null;
-
             Init init = method.getParameters()[i].getAnnotation(Init.class);
             if (init != null && !init.value().isEmpty()) {
                 paramName = init.value();
