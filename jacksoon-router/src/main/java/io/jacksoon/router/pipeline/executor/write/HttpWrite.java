@@ -1,18 +1,18 @@
 package io.jacksoon.router.pipeline.executor.write;
 
+import io.jacksoon.common.pipeline.context.HttpResponse;
 import io.jacksoon.init.annotation.Init;
-import io.jacksoon.router.pipeline.context.PipelineContext;
-import io.jacksoon.router.pipeline.context.RouterResponse;
-import io.jacksoon.router.pipeline.executor.Depth;
+import io.jacksoon.router.pipeline.context.RouterPipelineContext;
+import io.jacksoon.router.pipeline.executor.depth.RouterDepth;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 
 @Init
-public class HttpWrite implements Depth {
+public class HttpWrite implements RouterDepth {
     @Override
-    public void dodo(PipelineContext context) {
-        RouterResponse response = context.getResponse();
+    public void dodo(RouterPipelineContext context) {
+        HttpResponse response = context.getResponse();
         ByteBuffer buffer = context.getByteBuffer();
         response.getBufferContext().setResponseBuffer(buffer);
         SelectionKey key = response.getSelectionKey();
@@ -27,6 +27,6 @@ public class HttpWrite implements Depth {
 
     @Override
     public String nextEvent() {
-        return "";
+        return null;
     }
 }

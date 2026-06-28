@@ -1,11 +1,11 @@
 package io.jacksoon.router.config;
 
+import io.jacksoon.common.handler.AcceptHandler;
+import io.jacksoon.common.handler.Handler;
+import io.jacksoon.common.handler.RequestSubmitter;
+import io.jacksoon.common.selector.Reactor;
+import io.jacksoon.common.util.HttpRequestCheck;
 import io.jacksoon.init.annotation.Init;
-import io.jacksoon.router.handle.AcceptHandler;
-import io.jacksoon.router.handle.Handler;
-import io.jacksoon.router.help.HttpRequestCheck;
-import io.jacksoon.router.seletor.Reactor;
-import io.jacksoon.router.worker.thread.RequestPipelineQueue;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -39,12 +39,12 @@ public class ReactorConfig {
     }
 
     @Init("acceptHandler")
-    public AcceptHandler acceptHandler(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, RequestPipelineQueue queue, HttpRequestCheck check) {
-        return new AcceptHandler(selector, serverSocketChannel, queue, check);
+    public Handler acceptHandler(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, RequestSubmitter submitter) {
+        return new AcceptHandler(selector, serverSocketChannel, check, submitter);
     }
 
     @Init("backendReactor")
     public Reactor backendReactor(@Init("backendSelector") Selector selector) throws Exception {
-        return new Reactor(selector);}
-
+        return new Reactor(selector);
+    }
 }

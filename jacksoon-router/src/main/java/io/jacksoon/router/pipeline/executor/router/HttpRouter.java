@@ -1,26 +1,27 @@
 package io.jacksoon.router.pipeline.executor.router;
 
+import io.jacksoon.common.connection.ConnectionContexts;
 import io.jacksoon.init.annotation.Init;
-import io.jacksoon.router.handle.ProxyContext;
-import io.jacksoon.router.pipeline.context.PipelineContext;
-import io.jacksoon.router.pipeline.executor.Depth;
+import io.jacksoon.router.pipeline.context.ProxyContext;
+import io.jacksoon.router.pipeline.context.RouterPipelineContext;
+import io.jacksoon.router.pipeline.executor.depth.RouterDepth;
 
 import java.nio.channels.SelectionKey;
 
 @Init
-public class HttpRouter implements Depth {
+public class HttpRouter implements RouterDepth {
     private final FindRouter findRouter;
     public HttpRouter(FindRouter findRouter) {
         this.findRouter = findRouter;
     }
 
     @Override
-    public void dodo(PipelineContext context) {
-        ConnectionContexts connectionContext  = findRouter.getConnection(context.getRequest());
-        connectionContext.getRequestBackendQueue().put(new ProxyContext(context.getByteBuffer(),context.getResponse().getBufferContext(),context.getResponse().getSelectionKey()));
-        SelectionKey key = connectionContext.getSelectionKey();
+    public void dodo(RouterPipelineContext context) {
+        ConnectionContexts<ProxyContext> connectionContext  = findRouter.getConnection(context.getRequest());
+        connectionContext.requestBackendQueue().put(new ProxyContext(context.getByteBuffer(),context.getResponse().getBufferContext(),context.getResponse().getSelectionKey()));
+        SelectionKey key = connectionContext.selectionKey();
         key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
-        connectionContext.getSelectionKey().selector().wakeup();
+        connectionContext.selectionKey().selector().wakeup();
     }
     @Override
     public String currentEvent() {
@@ -28,6 +29,6 @@ public class HttpRouter implements Depth {
     }
     @Override
     public String nextEvent() {
-        return "";
+        return null;
     }
 }

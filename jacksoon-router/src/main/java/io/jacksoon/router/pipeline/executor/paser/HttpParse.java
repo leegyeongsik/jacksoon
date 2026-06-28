@@ -1,19 +1,19 @@
 package io.jacksoon.router.pipeline.executor.paser;
 
+import io.jacksoon.common.pipeline.context.HttpRequest;
 import io.jacksoon.init.annotation.Init;
-import io.jacksoon.router.pipeline.context.PipelineContext;
-import io.jacksoon.router.pipeline.context.RouterRequest;
-import io.jacksoon.router.pipeline.executor.Depth;
+import io.jacksoon.router.pipeline.context.RouterPipelineContext;
+import io.jacksoon.router.pipeline.executor.depth.RouterDepth;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 @Init
-public class HttpParse implements Depth {
+public class HttpParse implements RouterDepth {
     @Override
-    public void dodo(PipelineContext context) {
+    public void dodo(RouterPipelineContext context) {
 
-        RouterRequest routerRequest = context.getRequest();
+        HttpRequest httpRequest = context.getRequest();
 
         int headerLength = context.getByteBufferIndex();
 
@@ -40,9 +40,9 @@ public class HttpParse implements Depth {
             );
         }
 
-        routerRequest.setMethod(requestLine[0]);
-        routerRequest.setPath(requestLine[1]);
-        routerRequest.setVersion(requestLine[2]);
+        httpRequest.setMethod(requestLine[0]);
+        httpRequest.setPath(requestLine[1]);
+        httpRequest.setVersion(requestLine[2]);
 
         for (int i = 1; i < lines.length; i++) {
 
@@ -58,7 +58,7 @@ public class HttpParse implements Depth {
                 continue;
             }
 
-            routerRequest.getHeaders().put(
+            httpRequest.getHeaders().put(
                     parts[0].trim(),
                     parts[1].trim()
             );
