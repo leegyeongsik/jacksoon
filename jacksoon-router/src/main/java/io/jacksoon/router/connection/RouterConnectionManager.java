@@ -17,7 +17,7 @@ public class RouterConnectionManager implements ConnectionManager {
     private final Selector selector;
     private final ConnectionRegistry connectionRegistry;
     private final HttpResponseCheck responseCheck;
-    private final CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue; // check이 저깄을텐데
+    private final CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue;
     public RouterConnectionManager(@Init("backendSelector")Selector selector, ConnectionRegistry connectionRegistry, HttpResponseCheck responseCheck, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue) {
         this.selector = selector;
         this.connectionRegistry = connectionRegistry;
