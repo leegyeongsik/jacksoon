@@ -6,9 +6,9 @@ import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.util.CommonWorkerPool;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
-import io.jacksoon.router.worker.executor.RouterPipelineTaskExecutor;
-import io.jacksoon.router.worker.worker.ConnectionWorker;
-import io.jacksoon.router.worker.worker.RouterPipelineWorker;
+import io.jacksoon.router.pipeline.executor.RouterPipelineTaskExecutor;
+import io.jacksoon.router.worker.ConnectionWorker;
+import io.jacksoon.router.worker.RouterPipelineWorker;
 @Init
 public class WorkerPoolConfig {
     private static final int ROUTER_WORKER_COUNT = 1;

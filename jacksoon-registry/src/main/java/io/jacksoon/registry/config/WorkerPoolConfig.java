@@ -1,0 +1,41 @@
+package io.jacksoon.registry.config;
+
+import io.jacksoon.common.connection.ConnectionHandlerRegistry;
+import io.jacksoon.common.util.CommonBlockingQueue;
+import io.jacksoon.common.util.CommonWorkerPool;
+import io.jacksoon.init.annotation.Init;
+import io.jacksoon.registry.connection.EndPointConnectionManager;
+import io.jacksoon.registry.connection.EndpointConnectionContext;
+import io.jacksoon.registry.connection.event.EndPointEvent;
+import io.jacksoon.registry.handle.EndPointConnectionHandler;
+import io.jacksoon.registry.pipeline.context.RegistryPipelineContext;
+import io.jacksoon.registry.pipeline.executor.RegistryPipelineTaskExecutor;
+import io.jacksoon.registry.store.RegistryStore;
+import io.jacksoon.registry.worker.EndPointEventWorker;
+import io.jacksoon.registry.worker.EndPointHealthCheckWorker;
+import io.jacksoon.registry.worker.EndpointConnectionWorker;
+import io.jacksoon.registry.worker.RegistryPipelineWorker;
+
+@Init
+public class WorkerPoolConfig {
+
+    @Init
+    public CommonWorkerPool<RegistryPipelineWorker> registryPipelineWorkerPool(RegistryPipelineTaskExecutor executor, CommonBlockingQueue<RegistryPipelineContext> registryPipelineQueue) {
+        return new CommonWorkerPool<>(1, () -> new RegistryPipelineWorker(registryPipelineQueue, executor));
+    }
+
+    @Init
+    public CommonWorkerPool<EndpointConnectionWorker> endpointConnectionWorkerPool(EndPointConnectionManager connectionManager, CommonBlockingQueue<EndpointConnectionContext> endpointConnectionQueue) {
+        return new CommonWorkerPool<>(1, () -> new EndpointConnectionWorker(endpointConnectionQueue, connectionManager));
+    }
+
+    @Init
+    public CommonWorkerPool<EndPointEventWorker> endPointEventWorkerPool(CommonBlockingQueue<EndPointEvent> endPointEventQueue, RegistryStore registryStore) {
+        return new CommonWorkerPool<>(1, () -> new EndPointEventWorker(endPointEventQueue, registryStore));
+    }
+
+    @Init
+    public CommonWorkerPool<EndPointHealthCheckWorker> endPointHealthCheckWorkerPool(ConnectionHandlerRegistry<EndPointConnectionHandler> registry) {
+        return new CommonWorkerPool<>(1, () -> new EndPointHealthCheckWorker(registry));
+    }
+}

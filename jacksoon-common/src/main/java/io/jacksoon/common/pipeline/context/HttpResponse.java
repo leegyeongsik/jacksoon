@@ -1,17 +1,21 @@
 package io.jacksoon.common.pipeline.context;
 
-import io.jacksoon.common.util.BufferContext;
 import lombok.Getter;
+import lombok.Setter;
 
-import java.nio.channels.SelectionKey;
+import java.nio.ByteBuffer;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Getter
+@Setter
 public class HttpResponse {
-    private final BufferContext bufferContext;
-    private final SelectionKey selectionKey;
-
-    public HttpResponse(BufferContext bufferContext, SelectionKey selectionKey) {
-        this.bufferContext = bufferContext;
-        this.selectionKey = selectionKey;
+    private int statusCode = 200;
+    private String reasonPhrase = "OK";
+    private final Map<String, String> headers = new LinkedHashMap<>();
+    private Object body;
+    private ByteBuffer writeBuffer;
+    public void addHeader(String name, String value) {
+        headers.put(name, value);
     }
 }

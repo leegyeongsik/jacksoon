@@ -15,4 +15,5 @@ public class HttpRequest {
     HttpRequest(){
         headers =  new HashMap<>();
     }
+    private String body;
 }

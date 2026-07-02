@@ -1,4 +1,4 @@
-package io.jacksoon.router.worker.worker;
+package io.jacksoon.router.worker;
 
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.worker.Executor;

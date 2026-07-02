@@ -1,4 +1,4 @@
-package io.jacksoon.router.worker.worker;
+package io.jacksoon.router.worker;
 
 import io.jacksoon.common.connection.ConnectionContext;
 import io.jacksoon.common.connection.ConnectionManager;
@@ -19,8 +19,7 @@ public class ConnectionWorker implements Runnable{
         while (!Thread.currentThread().isInterrupted()) {
             try {
                 ConnectionContext connectionContext = connectionContextQueue.take();
-                SocketChannel socketChannel = connectionManager.connect(connectionContext);
-                connectionManager.create(socketChannel);
+                connectionManager.connectAndCreate(connectionContext);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;

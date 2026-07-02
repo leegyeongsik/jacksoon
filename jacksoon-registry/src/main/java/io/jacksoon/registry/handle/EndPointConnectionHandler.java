@@ -1,8 +1,158 @@
 package io.jacksoon.registry.handle;
 
-public class EndPointConnectionHandler {
+import io.jacksoon.common.connection.ConnectionHandlerRegistry;
+import io.jacksoon.common.handler.NioConnectionHandler;
+import io.jacksoon.common.util.CommonBlockingQueue;
+import io.jacksoon.registry.connection.EndpointConnection;
+import io.jacksoon.registry.connection.event.EndPointEvent;
+import io.jacksoon.registry.connection.event.EndpointFailureEvent;
 
-    //얘는 일단 커넥션에서 엔드포인트맺고 엔드포인트에 주기적으로 호출할거임
-    // 여기도 식별할수있는거 찾고
-    // 만약에 실패났으면 queue에 식별정보 보내셈 삭제해라고 그랬을떄 regi , store 에 가서 삭제해야댐
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
+
+public class EndPointConnectionHandler extends NioConnectionHandler {
+    private final EndpointConnection connection;
+    private final ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry;
+    private final CommonBlockingQueue<EndPointEvent> endpointEventQueue;
+
+    public EndPointConnectionHandler(Selector selector, SocketChannel socketChannel, EndpointConnection connection, ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry, CommonBlockingQueue<EndPointEvent> endpointEventQueue) {
+        super(selector, socketChannel, initInterestOps(socketChannel, connection));
+        this.connection = connection;
+        this.endpointConnectionRegistry = endpointConnectionRegistry;
+        this.endpointEventQueue = endpointEventQueue;
+    }
+
+    private static int initInterestOps(SocketChannel socketChannel, EndpointConnection connection) {
+        if (socketChannel.isConnected()) {
+            connection.setConnected(true);
+            connection.setFailCount(0);
+            connection.prepareHealthCheckRequest();
+            return SelectionKey.OP_WRITE;
+        }
+        return SelectionKey.OP_CONNECT;
+    }
+
+    @Override
+    public void handle() {
+        try {
+            if (!selectionKey.isValid()) {
+                fail("selection key is invalid");
+                return;
+            }
+
+            if (selectionKey.isConnectable()) {
+                connect();
+                return;
+            }
+
+            if (selectionKey.isWritable()) {
+                writeHealthCheck();
+                return;
+            }
+
+            if (selectionKey.isReadable()) {
+                readHealthCheckResponse();
+            }
+        } catch (IOException e) {
+            fail(e.toString());
+        }
+    }
+
+    private void connect() throws IOException {
+        if (!socketChannel.finishConnect()) {
+            return;
+        }
+
+        connection.setConnected(true);
+        connection.setFailCount(0);
+        connection.prepareHealthCheckRequest();
+
+        setInterestOps(SelectionKey.OP_WRITE);
+    }
+
+    private void writeHealthCheck() throws IOException {
+        ByteBuffer requestBuffer = connection.getRequestBuffer();
+
+        if (requestBuffer == null) {
+            connection.prepareHealthCheckRequest();
+            requestBuffer = connection.getRequestBuffer();
+        }
+
+        socketChannel.write(requestBuffer);
+
+        if (requestBuffer.hasRemaining()) {
+            setInterestOps(SelectionKey.OP_WRITE);
+            return;
+        }
+
+        connection.clearResponseBuffer();
+        setInterestOps(SelectionKey.OP_READ);
+    }
+
+    private void readHealthCheckResponse() throws IOException {
+        ByteBuffer responseBuffer = connection.getResponseBuffer();
+
+        int read = socketChannel.read(responseBuffer);
+
+        if (read == -1) {
+            fail("endpoint closed connection");
+            return;
+        }
+
+        if (read == 0) {
+            return;
+        }
+
+        if (!isHttpHeaderComplete(responseBuffer)) {
+            setInterestOps(SelectionKey.OP_READ);
+            return;
+        }
+
+        String response = new String(responseBuffer.array(), 0, responseBuffer.position(), StandardCharsets.UTF_8);
+
+        if (isHealthy(response)) {
+            connection.setFailCount(0);
+            setInterestOps(0);
+            return;
+        }
+
+        fail("unhealthy response");
+    }
+
+    public void fireHealthCheckEvent() {
+        if (!connection.isConnected()) {
+            return;
+        }
+
+        if (!selectionKey.isValid()) {
+            return;
+        }
+
+        connection.prepareHealthCheckRequest();
+        connection.clearResponseBuffer();
+
+        addInterestOps(SelectionKey.OP_WRITE);
+    }
+
+    private boolean isHttpHeaderComplete(ByteBuffer responseBuffer) {
+        String response = new String(responseBuffer.array(), 0, responseBuffer.position(), StandardCharsets.UTF_8);
+
+        return response.contains("\r\n\r\n");
+    }
+
+    private boolean isHealthy(String response) {
+        return response.startsWith("HTTP/1.1 200") || response.startsWith("HTTP/1.0 200");
+    }
+
+    private void fail(String reason) {
+        connection.setConnected(false);
+        close();
+        endpointConnectionRegistry.remove(connection.getKey());
+
+        endpointEventQueue.put(new EndpointFailureEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), reason));
+    }
 }

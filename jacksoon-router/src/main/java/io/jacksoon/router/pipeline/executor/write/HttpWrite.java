@@ -12,10 +12,9 @@ import java.nio.channels.SelectionKey;
 public class HttpWrite implements RouterDepth {
     @Override
     public void dodo(RouterPipelineContext context) {
-        HttpResponse response = context.getResponse();
         ByteBuffer buffer = context.getByteBuffer();
-        response.getBufferContext().setResponseBuffer(buffer);
-        SelectionKey key = response.getSelectionKey();
+        context.getBufferContext().setResponseBuffer(buffer);
+        SelectionKey key = context.getSelectionKey();
         key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
         key.selector().wakeup();
     }

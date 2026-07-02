@@ -4,15 +4,16 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.SocketChannel;
 
-public interface ConnectionManager {
-    default SocketChannel connect(ConnectionContext connectionContext) {
+public interface ConnectionManager<T extends ConnectionContext> {
+
+    default SocketChannel connect(T context) {
         try {
             SocketChannel socketChannel = SocketChannel.open();
             socketChannel.configureBlocking(false);
             socketChannel.connect(
                     new InetSocketAddress(
-                            connectionContext.getHost(),
-                            connectionContext.getPort()
+                            context.getHost(),
+                            context.getPort()
                     )
             );
             return socketChannel;
@@ -21,5 +22,10 @@ public interface ConnectionManager {
         }
     }
 
-    public void create(SocketChannel socketChannel);
+    void create(T context, SocketChannel socketChannel);
+
+    default void connectAndCreate(T context) {
+        SocketChannel socketChannel = connect(context);
+        create(context, socketChannel);
+    }
 }

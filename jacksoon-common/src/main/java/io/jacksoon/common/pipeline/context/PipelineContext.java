@@ -17,6 +17,8 @@ public class PipelineContext {
     private int byteBufferIndex;
     private HttpRequest request;
     private HttpResponse response;
+    private BufferContext bufferContext;
+    private SelectionKey selectionKey;
 
     public PipelineContext(SocketChannel socketChannel, String event, ByteBuffer byteBuffer, int byteBufferIndex, BufferContext bufferContext , SelectionKey selectionKey) {
         this.socketChannel = socketChannel;
@@ -24,6 +26,8 @@ public class PipelineContext {
         this.byteBuffer = byteBuffer;
         this.byteBufferIndex = byteBufferIndex;
         this.request = new HttpRequest();
-        this.response = new HttpResponse(bufferContext,selectionKey);
+        this.response = new HttpResponse();
+        this.bufferContext = bufferContext;
+        this.selectionKey = selectionKey;
     }
 }

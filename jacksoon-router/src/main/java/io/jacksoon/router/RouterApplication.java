@@ -3,8 +3,8 @@ package io.jacksoon.router;
 import io.jacksoon.common.selector.Reactor;
 import io.jacksoon.common.util.CommonWorkerPool;
 import io.jacksoon.init.annotation.Init;
-import io.jacksoon.router.worker.worker.ConnectionWorker;
-import io.jacksoon.router.worker.worker.RouterPipelineWorker;
+import io.jacksoon.router.worker.ConnectionWorker;
+import io.jacksoon.router.worker.RouterPipelineWorker;
 
 @Init
 public class RouterApplication {

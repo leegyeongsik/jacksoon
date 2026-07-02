@@ -1,60 +1,55 @@
 package io.jacksoon.router.handler;
-
-
-import io.jacksoon.common.handler.Handler;
+import io.jacksoon.common.handler.NioConnectionHandler;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.util.HttpResponseCheck;
 import io.jacksoon.common.util.ResponseCheckResult;
 import io.jacksoon.router.pipeline.context.ProxyContext;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
-import lombok.Getter;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 
-public class BackendIOHandler implements Handler {
-    private final SocketChannel socketChannel;
-    @Getter
-    private final SelectionKey selectionKey;
+public class BackendIOHandler extends NioConnectionHandler {
     private final CommonBlockingQueue<ProxyContext> requestQueue;
     private final CommonBlockingQueue<ProxyContext> responseQueue;
+    private final CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue;
     private final HttpResponseCheck responseCheck;
-    final CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue;
+
     private ProxyContext currentWriteContext;
 
     public BackendIOHandler(Selector selector, SocketChannel socketChannel, CommonBlockingQueue<ProxyContext> requestQueue, CommonBlockingQueue<ProxyContext> responseQueue, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, HttpResponseCheck responseCheck) {
-        this.socketChannel = socketChannel;
+        super(selector, socketChannel, SelectionKey.OP_CONNECT);
         this.requestQueue = requestQueue;
         this.responseQueue = responseQueue;
         this.routerPipelineQueue = routerPipelineQueue;
         this.responseCheck = responseCheck;
-        try {
-            selectionKey = socketChannel.register(selector, SelectionKey.OP_CONNECT);
-        } catch (ClosedChannelException e) {
-            throw new RuntimeException(e);
-        }
-        selectionKey.attach(this);
-
-        selector.wakeup();
     }
 
     @Override
     public void handle() {
         try {
+            if (!selectionKey.isValid()) {
+                close();
+                return;
+            }
+
             if (selectionKey.isConnectable()) {
                 connect();
-            } else if (selectionKey.isReadable()) {
+            }
+
+            if (selectionKey.isReadable()) {
                 read();
-            } else if (selectionKey.isWritable()) {
+            }
+
+            if (selectionKey.isWritable()) {
                 write();
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (IOException | InterruptedException e) {
+            close();
         }
+
     }
 
     public void read() throws InterruptedException {
@@ -127,6 +122,24 @@ public class BackendIOHandler implements Handler {
         selectionKey.interestOps(SelectionKey.OP_READ);
     }
 
+    public void send(ProxyContext context) {
+        requestQueue.put(context);
+
+        if (!selectionKey.isValid()) {
+            close();
+            return;
+        }
+
+        if (!socketChannel.isConnected()) {
+            selectionKey.interestOps(SelectionKey.OP_CONNECT);
+            selector.wakeup();
+            return;
+        }
+
+        selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
+        selector.wakeup();
+    }
+
     private void completeBackendResponse(ProxyContext proxyContext, ResponseCheckResult result, boolean backendClosed) throws InterruptedException {
         responseQueue.poll();
         ByteBuffer responseBuffer = proxyContext.responseBuffer;
@@ -155,16 +168,4 @@ public class BackendIOHandler implements Handler {
         }
     }
 
-    private void close() {
-        try {
-            if (selectionKey != null) {
-                selectionKey.cancel();
-            }
-        } catch (Exception ignored) {
-        }
-        try {
-            socketChannel.close();
-        } catch (IOException ignored) {
-        }
-    }
 }
