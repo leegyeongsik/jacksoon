@@ -32,17 +32,13 @@ public class EndPointConnectionManager implements ConnectionManager<EndpointConn
                 context.getPort(),
                 context.getHealthPath()
         );
-
-        EndPointConnectionHandler handler = new EndPointConnectionHandler(
+        new EndPointConnectionHandler(
                 endpointSelector,
                 socketChannel,
                 connection,
                 endpointConnectionRegistry,
                 endpointEventQueue
         );
-
-        endpointConnectionRegistry.put(context.key(), handler);
-
         endpointSelector.wakeup();
     }
 }

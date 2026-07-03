@@ -2,21 +2,23 @@ package io.jacksoon.registry.worker;
 
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.registry.connection.event.EndPointEvent;
-import io.jacksoon.registry.store.RegistryStore;
+import io.jacksoon.registry.connection.event.EndPointEventRegistry;
 
-public class EndPointEventWorker implements Runnable{
+public class EndPointEventWorker implements Runnable {
     private final CommonBlockingQueue<EndPointEvent> endPointEventQueue;
-    private final RegistryStore registryStore;
-    public EndPointEventWorker(CommonBlockingQueue<EndPointEvent> endPointEventQueue, RegistryStore registryStore) {
+    private final EndPointEventRegistry registry;
+
+    public EndPointEventWorker(CommonBlockingQueue<EndPointEvent> endPointEventQueue, EndPointEventRegistry registry) {
         this.endPointEventQueue = endPointEventQueue;
-        this.registryStore = registryStore;
+        this.registry = registry;
     }
+
     @Override
     public void run() {
         while (!Thread.currentThread().isInterrupted()) {
             try {
                 EndPointEvent endPointEvent = endPointEventQueue.take();
-                registryStore.removeEndpoint(endPointEvent.getServiceName(),endPointEvent.getInstanceId());
+                registry.execute(endPointEvent);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;

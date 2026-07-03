@@ -5,7 +5,6 @@ import io.jacksoon.common.handler.NioConnectionHandler;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.registry.connection.EndpointConnection;
 import io.jacksoon.registry.connection.event.EndPointEvent;
-import io.jacksoon.registry.connection.event.EndpointFailureEvent;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -18,7 +17,6 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
     private final EndpointConnection connection;
     private final ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry;
     private final CommonBlockingQueue<EndPointEvent> endpointEventQueue;
-
     public EndPointConnectionHandler(Selector selector, SocketChannel socketChannel, EndpointConnection connection, ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry, CommonBlockingQueue<EndPointEvent> endpointEventQueue) {
         super(selector, socketChannel, initInterestOps(socketChannel, connection));
         this.connection = connection;
@@ -70,7 +68,8 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         connection.setConnected(true);
         connection.setFailCount(0);
         connection.prepareHealthCheckRequest();
-
+        endpointEventQueue.put(new EndPointEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "success"));
+        endpointEventQueue.put(new EndPointEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "connection"));
         setInterestOps(SelectionKey.OP_WRITE);
     }
 
@@ -152,7 +151,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         connection.setConnected(false);
         close();
         endpointConnectionRegistry.remove(connection.getKey());
-
-        endpointEventQueue.put(new EndpointFailureEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), reason));
+        // 이거 뭐 어떻게든 커넥션이 안맺어지면 그냥 그대로 fail이고  최초 맺어진 이후에는 연결되고 그 다음에 fail일어날테니까 상관없을거같은데 정 그러면 큐 하나 두던가 순서대로 넣고 순서대로 빠지도록
+        endpointEventQueue.put(new EndPointEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "fail"));
     }
 }

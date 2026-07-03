@@ -34,7 +34,8 @@ public class RegistryStore {
                 endpoint.getPort(),
                 endpoint.getProtocol(),
                 endpoint.getHealthPath(),
-                endpoint.getWeight()
+                endpoint.getWeight(),
+                "pending"
         );
 
         service.putEndpoint(registeredEndpoint);
@@ -53,20 +54,25 @@ public class RegistryStore {
     private void removeOldRules(String serviceName) {
         routeRules.removeIf(rule -> rule.getServiceName().equals(serviceName));
     }
+
     public synchronized RegistrySnapshot snapshot() {
         List<ServiceSnapshot> services = serviceMap.values().stream()
                 .map(service -> {
-                    List<EndpointSnapshot> endpoints = service.endpoints().stream().map(endpoint -> new EndpointSnapshot(
-                            endpoint.getInstanceId(),
-                            endpoint.getHost(),
-                            endpoint.getPort(),
-                            endpoint.getProtocol(),
-                            endpoint.getHealthPath(),
-                            endpoint.getWeight()
-                    )).toList();
+                    List<EndpointSnapshot> endpoints = service.endpoints().stream()
+                            .filter(endpoint -> "success".equals(endpoint.getStatus()))
+                            .map(endpoint -> new EndpointSnapshot(
+                                    endpoint.getInstanceId(),
+                                    endpoint.getHost(),
+                                    endpoint.getPort(),
+                                    endpoint.getProtocol(),
+                                    endpoint.getHealthPath(),
+                                    endpoint.getWeight()
+                            ))
+                            .toList();
 
                     return new ServiceSnapshot(service.getServiceName(), endpoints);
-                }).toList();
+                })
+                .toList();
 
         List<RouteRuleSnapshot> rules = routeRules.stream().map(rule -> new RouteRuleSnapshot(rule.getServiceName(), rule.getPathPrefix(), rule.isStripPrefix())).toList();
 
@@ -83,5 +89,13 @@ public class RegistryStore {
             serviceMap.remove(serviceName);
             removeOldRules(serviceName);
         }
+    }
+
+    public synchronized void successEndpoint(String serviceName, String instanceId) {
+        RegisteredService service = serviceMap.get(serviceName);
+        if (service == null) {
+            return;
+        }
+        service.successEndPoint(instanceId);
     }
 }
