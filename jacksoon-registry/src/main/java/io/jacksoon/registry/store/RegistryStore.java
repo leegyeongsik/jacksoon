@@ -59,7 +59,7 @@ public class RegistryStore {
         List<ServiceSnapshot> services = serviceMap.values().stream()
                 .map(service -> {
                     List<EndpointSnapshot> endpoints = service.endpoints().stream()
-                            .filter(endpoint -> "success".equals(endpoint.getStatus()))
+                            .filter(endpoint -> "active".equals(endpoint.getStatus()))
                             .map(endpoint -> new EndpointSnapshot(
                                     endpoint.getInstanceId(),
                                     endpoint.getHost(),

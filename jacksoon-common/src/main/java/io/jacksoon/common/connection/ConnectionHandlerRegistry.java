@@ -4,8 +4,9 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class ConnectionHandlerRegistry<T extends AutoCloseable> { // 따로 레지스트리 관리하는 워커가 존재하고 그 워커가 이것도 관리
-    private final Map<String, T> handlerMap = new ConcurrentHashMap<>();
+public class ConnectionHandlerRegistry<T extends AutoCloseable> {
+    private final Map<String, T> handlerMap = new ConcurrentHashMap<>(); // 그러면 저거를 집어넣으면되지
+    // 일단 그러면 이거를 수정하면 service안에 맵이 있는식으로 인스턴스로다가
 
     public void put(String key, T handler) {
         handlerMap.put(key, handler);
@@ -28,7 +29,6 @@ public class ConnectionHandlerRegistry<T extends AutoCloseable> { // 따로 레�
         if (handler == null) {
             return;
         }
-
         try {
             handler.close();
         } catch (Exception e) {

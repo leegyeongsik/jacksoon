@@ -8,10 +8,7 @@ public class EndpointConnectionWorker implements Runnable {
     private final CommonBlockingQueue<EndpointConnectionContext> endpointConnectionQueue;
     private final EndPointConnectionManager connectionManager;
 
-    public EndpointConnectionWorker(
-            CommonBlockingQueue<EndpointConnectionContext> endpointConnectionQueue,
-            EndPointConnectionManager connectionManager
-    ) {
+    public EndpointConnectionWorker(CommonBlockingQueue<EndpointConnectionContext> endpointConnectionQueue, EndPointConnectionManager connectionManager) {
         this.endpointConnectionQueue = endpointConnectionQueue;
         this.connectionManager = connectionManager;
     }
