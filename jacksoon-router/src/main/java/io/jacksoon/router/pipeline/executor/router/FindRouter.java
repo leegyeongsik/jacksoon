@@ -1,24 +1,39 @@
 package io.jacksoon.router.pipeline.executor.router;
 
-import io.jacksoon.common.connection.ConnectionHandlerRegistry;
 import io.jacksoon.common.pipeline.context.HttpRequest;
 import io.jacksoon.init.annotation.Init;
-import io.jacksoon.router.handler.BackendIOHandler;
+import io.jacksoon.router.connection.BackendConnectionPool;
+import io.jacksoon.router.connection.BackendConnectionPoolManager;
+import io.jacksoon.router.connection.store.ResolvedRoute;
+import io.jacksoon.router.connection.store.RouterRegistryStore;
 
 @Init
 public class FindRouter {
-    private final ConnectionHandlerRegistry<BackendIOHandler> connectionRegistry;
+    private final RouterRegistryStore routerRegistryStore;
+    private final BackendConnectionPoolManager backendConnectionPoolManager;
 
-    public FindRouter(ConnectionHandlerRegistry<BackendIOHandler> connectionRegistry) {
-        this.connectionRegistry = connectionRegistry;
+    public FindRouter(RouterRegistryStore routerRegistryStore, BackendConnectionPoolManager backendConnectionPoolManager) {
+        this.routerRegistryStore = routerRegistryStore;
+        this.backendConnectionPoolManager = backendConnectionPoolManager;
     }
 
-    BackendIOHandler getConnection(HttpRequest httpRequest) {
-        String key = httpRequest.getPath();
-        if(connectionRegistry.get("a") == null){
-            throw new RuntimeException();
-        }
-        return connectionRegistry.get("a");
+    public RoutingTarget find(HttpRequest httpRequest) {
+        String path = httpRequest.getPath();
 
+        ResolvedRoute route = routerRegistryStore.resolve(path);
+
+        if (route == null) {
+            throw new IllegalStateException("No route matched. path=" + path);
+        }
+
+        BackendConnectionPool pool = backendConnectionPoolManager.select(route.getServiceName());
+
+        if (pool == null) {
+            throw new IllegalStateException(
+                    "No backend pool. serviceName=" + route.getServiceName()
+            );
+        }
+
+        return new RoutingTarget(pool, route.getBackendPath());
     }
 }

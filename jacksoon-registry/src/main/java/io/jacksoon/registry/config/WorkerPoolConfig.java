@@ -7,10 +7,10 @@ import io.jacksoon.init.annotation.Init;
 import io.jacksoon.registry.connection.EndPointConnectionManager;
 import io.jacksoon.registry.connection.EndpointConnectionContext;
 import io.jacksoon.registry.connection.event.EndPointEvent;
+import io.jacksoon.registry.connection.event.EndPointEventRegistry;
 import io.jacksoon.registry.handle.EndPointConnectionHandler;
 import io.jacksoon.registry.pipeline.context.RegistryPipelineContext;
 import io.jacksoon.registry.pipeline.executor.RegistryPipelineTaskExecutor;
-import io.jacksoon.registry.store.RegistryStore;
 import io.jacksoon.registry.worker.EndPointEventWorker;
 import io.jacksoon.registry.worker.EndPointHealthCheckWorker;
 import io.jacksoon.registry.worker.EndpointConnectionWorker;
@@ -30,8 +30,8 @@ public class WorkerPoolConfig {
     }
 
     @Init
-    public CommonWorkerPool<EndPointEventWorker> endPointEventWorkerPool(CommonBlockingQueue<EndPointEvent> endPointEventQueue, RegistryStore registryStore) {
-        return new CommonWorkerPool<>(1, () -> new EndPointEventWorker(endPointEventQueue, registryStore));
+    public CommonWorkerPool<EndPointEventWorker> endPointEventWorkerPool(CommonBlockingQueue<EndPointEvent> endPointEventQueue , EndPointEventRegistry endPointEventRegistry) {
+        return new CommonWorkerPool<>(1, () -> new EndPointEventWorker(endPointEventQueue,endPointEventRegistry));
     }
 
     @Init

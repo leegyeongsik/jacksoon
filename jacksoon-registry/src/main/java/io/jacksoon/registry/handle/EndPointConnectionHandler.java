@@ -4,8 +4,8 @@ import io.jacksoon.common.connection.ConnectionHandlerRegistry;
 import io.jacksoon.common.handler.NioConnectionHandler;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.registry.connection.EndpointConnection;
+import io.jacksoon.registry.connection.event.EndPointConnectionEvent;
 import io.jacksoon.registry.connection.event.EndPointEvent;
-import io.jacksoon.registry.connection.event.EndpointFailureEvent;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -18,7 +18,6 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
     private final EndpointConnection connection;
     private final ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry;
     private final CommonBlockingQueue<EndPointEvent> endpointEventQueue;
-
     public EndPointConnectionHandler(Selector selector, SocketChannel socketChannel, EndpointConnection connection, ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry, CommonBlockingQueue<EndPointEvent> endpointEventQueue) {
         super(selector, socketChannel, initInterestOps(socketChannel, connection));
         this.connection = connection;
@@ -70,7 +69,8 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         connection.setConnected(true);
         connection.setFailCount(0);
         connection.prepareHealthCheckRequest();
-
+        endpointEventQueue.put(new EndPointEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "success"));
+        endpointEventQueue.put(new EndPointConnectionEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "connection",this));
         setInterestOps(SelectionKey.OP_WRITE);
     }
 
@@ -152,7 +152,6 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         connection.setConnected(false);
         close();
         endpointConnectionRegistry.remove(connection.getKey());
-
-        endpointEventQueue.put(new EndpointFailureEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), reason));
+        endpointEventQueue.put(new EndPointEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "fail"));
     }
 }

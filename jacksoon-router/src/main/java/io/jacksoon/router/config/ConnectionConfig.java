@@ -9,11 +9,6 @@ import io.jacksoon.router.handler.BackendIOHandler;
 @Init
 public class ConnectionConfig {
     @Init
-    public ConnectionHandlerRegistry<BackendIOHandler> connectionRegistry() {
-        return new ConnectionHandlerRegistry<>();
-    }
-
-    @Init
     public HttpRequestCheck httpRequestCheck() {
         return new HttpRequestCheck();
     }

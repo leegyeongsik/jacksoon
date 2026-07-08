@@ -24,4 +24,5 @@ public class RegisteredService {
     public void removeEndpoint(String instanceId) {
         endpointMap.remove(instanceId);
     }
+    public void successEndPoint(String instanceId){endpointMap.get(instanceId).setStatus("active");}
 }

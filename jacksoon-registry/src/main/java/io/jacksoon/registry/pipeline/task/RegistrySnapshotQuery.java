@@ -23,6 +23,6 @@ public class RegistrySnapshotQuery implements RegistryDepth {
     }
     @Override
     public String currentEvent() {
-        return "/info";
+        return "/snapshot";
     }
 }
