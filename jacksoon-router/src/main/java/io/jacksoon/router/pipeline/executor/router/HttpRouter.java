@@ -28,8 +28,7 @@ public class HttpRouter implements RouterDepth {
                 context.getRequest().getVersion()
         );
 
-        target.getPool().send(new ProxyContext(backendRequestBuffer, context.getBufferContext(), context.getSelectionKey())
-        );
+        target.getPool().send(new ProxyContext(backendRequestBuffer, context.getBufferContext(), context.getSelectionKey()));
     }
 
     @Override

@@ -5,12 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.registry.dto.request.EndpointInfo;
 import io.jacksoon.registry.dto.request.RegistryRegisterRequest;
+import io.jacksoon.registry.pipeline.context.RegistryPipelineContext;
+
+import java.nio.charset.StandardCharsets;
 
 @Init
 public class RegistryRegisterRequestParser {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public RegistryRegisterRequest parse(String body) {
+    public RegistryRegisterRequest parse(RegistryPipelineContext context) {
+        String body = new String(context.getRequest().getBody(), StandardCharsets.UTF_8);
         if (body == null || body.isBlank()) {
             throw new IllegalArgumentException("Register request body is empty");
         }

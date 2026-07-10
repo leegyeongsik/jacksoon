@@ -12,19 +12,26 @@ import java.nio.charset.StandardCharsets;
 public class HttpParse implements RouterDepth {
     @Override
     public void dodo(RouterPipelineContext context) {
-
         HttpRequest httpRequest = context.getRequest();
-
-        int headerLength = context.getByteBufferIndex();
-
-        byte[] bytes = new byte[headerLength];
 
         ByteBuffer buffer = context.getByteBuffer().duplicate();
 
-        buffer.position(0);
-        buffer.get(bytes);
+        int headerLength = context.getByteBufferIndex();
+        int requestLength = buffer.limit();
 
-        String header = new String(bytes, StandardCharsets.UTF_8);
+        parseHeader(buffer, headerLength, httpRequest);
+        parseBody(buffer, headerLength, requestLength, httpRequest);
+
+        context.setEvent(httpRequest.getPath());
+    }
+
+    private void parseHeader(ByteBuffer buffer, int headerLength, HttpRequest httpRequest) {
+        byte[] headerBytes = new byte[headerLength];
+
+        buffer.position(0);
+        buffer.get(headerBytes);
+
+        String header = new String(headerBytes, StandardCharsets.UTF_8);
 
         String[] lines = header.split("\r\n");
 
@@ -35,9 +42,7 @@ public class HttpParse implements RouterDepth {
         String[] requestLine = lines[0].trim().split(" ");
 
         if (requestLine.length < 3) {
-            throw new IllegalArgumentException(
-                    "Invalid request line: [" + lines[0] + "]"
-            );
+            throw new IllegalArgumentException("Invalid request line: " + lines[0]);
         }
 
         httpRequest.setMethod(requestLine[0]);
@@ -45,7 +50,6 @@ public class HttpParse implements RouterDepth {
         httpRequest.setVersion(requestLine[2]);
 
         for (int i = 1; i < lines.length; i++) {
-
             String line = lines[i];
 
             if (line.isEmpty()) {
@@ -63,6 +67,21 @@ public class HttpParse implements RouterDepth {
                     parts[1].trim()
             );
         }
+    }
+
+    private void parseBody(ByteBuffer buffer, int headerLength, int requestLength, HttpRequest httpRequest) {
+        int bodyLength = requestLength - headerLength;
+
+        if (bodyLength <= 0) {
+            httpRequest.setBody(new byte[]{});
+            return;
+        }
+
+        byte[] bodyBytes = new byte[bodyLength];
+
+        buffer.position(headerLength);
+        buffer.get(bodyBytes);
+        httpRequest.setBody(bodyBytes);
     }
 
     @Override

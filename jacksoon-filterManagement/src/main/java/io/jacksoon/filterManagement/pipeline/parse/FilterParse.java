@@ -1,18 +1,26 @@
-package io.jacksoon.registry.pipeline.parse;
+package io.jacksoon.filterManagement.pipeline.parse;
 
 import io.jacksoon.common.pipeline.context.HttpRequest;
+import io.jacksoon.filterManagement.pipeline.context.FilterPipelineContext;
+import io.jacksoon.filterManagement.pipeline.depth.FilterDepth;
+import io.jacksoon.filterManagement.pipeline.util.FilterRequestParser;
 import io.jacksoon.init.annotation.Init;
-import io.jacksoon.registry.pipeline.context.RegistryPipelineContext;
-import io.jacksoon.registry.pipeline.depth.RegistryDepth;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.logging.Filter;
 
 @Init
-public class RegistryParse implements RegistryDepth {
+public class FilterParse implements FilterDepth {
+    private final FilterRequestParser requestParser;
+
+    public FilterParse(FilterRequestParser requestParser) {
+        this.requestParser = requestParser;
+
+    }
 
     @Override
-    public void dodo(RegistryPipelineContext context) {
+    public void dodo(FilterPipelineContext context) {
         HttpRequest httpRequest = context.getRequest();
 
         ByteBuffer buffer = context.getByteBuffer().duplicate();
@@ -22,7 +30,7 @@ public class RegistryParse implements RegistryDepth {
 
         parseHeader(buffer, headerLength, httpRequest);
         parseBody(buffer, headerLength, requestLength, httpRequest);
-
+        context.setFilterUploadRequest(requestParser.parse(context));
         context.setEvent(httpRequest.getPath());
     }
 
@@ -70,12 +78,7 @@ public class RegistryParse implements RegistryDepth {
         }
     }
 
-    private void parseBody(
-            ByteBuffer buffer,
-            int headerLength,
-            int requestLength,
-            HttpRequest httpRequest
-    ) {
+    private void parseBody(ByteBuffer buffer, int headerLength, int requestLength, HttpRequest httpRequest) {
         int bodyLength = requestLength - headerLength;
 
         if (bodyLength <= 0) {
@@ -87,7 +90,6 @@ public class RegistryParse implements RegistryDepth {
 
         buffer.position(headerLength);
         buffer.get(bodyBytes);
-
         httpRequest.setBody(bodyBytes);
     }
 
