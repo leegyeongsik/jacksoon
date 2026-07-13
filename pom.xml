@@ -14,6 +14,7 @@
         <module>jacksoon-init</module>
         <module>jacksoon-router</module>
         <module>jacksoon-registry</module>
+        <module>jacksoon-filterManagement</module>
     </modules>
 
     <properties>
