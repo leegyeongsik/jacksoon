@@ -22,7 +22,6 @@ public class HttpParse implements RouterDepth {
         parseHeader(buffer, headerLength, httpRequest);
         parseBody(buffer, headerLength, requestLength, httpRequest);
 
-        context.setEvent(httpRequest.getPath());
     }
 
     private void parseHeader(ByteBuffer buffer, int headerLength, HttpRequest httpRequest) {
@@ -36,13 +35,13 @@ public class HttpParse implements RouterDepth {
         String[] lines = header.split("\r\n");
 
         if (lines.length == 0) {
-            throw new IllegalArgumentException("No request line");
+            throw new IllegalArgumentException();
         }
 
         String[] requestLine = lines[0].trim().split(" ");
 
         if (requestLine.length < 3) {
-            throw new IllegalArgumentException("Invalid request line: " + lines[0]);
+            throw new IllegalArgumentException();
         }
 
         httpRequest.setMethod(requestLine[0]);
@@ -62,10 +61,7 @@ public class HttpParse implements RouterDepth {
                 continue;
             }
 
-            httpRequest.getHeaders().put(
-                    parts[0].trim(),
-                    parts[1].trim()
-            );
+            httpRequest.getHeaders().put(parts[0].trim(), parts[1].trim());
         }
     }
 

@@ -1,4 +1,4 @@
-package io.jacksoon.filterManagement.pipeline.context;
+package io.jacksoon.common.filter;
 
 public enum FilterFileType {
     JAVA,

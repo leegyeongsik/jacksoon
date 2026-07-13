@@ -1,25 +1,26 @@
 package io.jacksoon.filterManagement.pipeline.task;
 
+import io.jacksoon.common.filter.FilterUploadRequest;
 import io.jacksoon.filterManagement.pipeline.context.FilterPipelineContext;
 import io.jacksoon.filterManagement.pipeline.depth.FilterDepth;
-import io.jacksoon.filterManagement.store.FilterStore;
+import io.jacksoon.filterManagement.pipeline.util.Jar;
 import io.jacksoon.init.annotation.Init;
 
 @Init
 public class FilterJar implements FilterDepth {
-    private final FilterStore filterStore;
-
-    public FilterJar(FilterStore filterStore) {
-        this.filterStore = filterStore;
+    private final Jar jar;
+    public FilterJar(Jar jar) {
+        this.jar = jar;
     }
-
     @Override
     public void dodo(FilterPipelineContext context) {
-        // jar로 만들고 디렉토리에 저장
+        FilterUploadRequest request = context.getFilterUploadRequest();
+        context.setArtifactPath(jar.create(request.config(), context.getOperationVersion()));
+        context.setEvent("create");
     }
 
     @Override
     public String currentEvent() {
-        return "";
+        return "jar";
     }
 }

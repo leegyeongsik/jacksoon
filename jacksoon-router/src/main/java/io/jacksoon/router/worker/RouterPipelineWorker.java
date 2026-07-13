@@ -15,11 +15,13 @@ public class RouterPipelineWorker implements Runnable {
     public void run() {
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                RouterPipelineContext routerPipelineContext = routerPipelineQueue.take();
-                executor.execute(routerPipelineContext);
+                RouterPipelineContext context = routerPipelineQueue.take();
+                executor.execute(context);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
+            } catch (RuntimeException e) {
+                e.printStackTrace();
             }
         }
     }

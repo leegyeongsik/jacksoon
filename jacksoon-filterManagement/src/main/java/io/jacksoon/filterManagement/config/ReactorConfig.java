@@ -21,21 +21,21 @@ public class ReactorConfig {
         return Selector.open();
     }
 
-    @Init("filterServerSocket")
+    @Init("FilterServerSocket")
     public ServerSocketChannel filterServerSocket() throws IOException {
         return ServerSocketChannel.open();
     }
 
-    @Init("filterReactor")
-    public Reactor filterReactor(@Init("filterSelector") Selector selector, @Init("filterServerSocket") ServerSocketChannel serverSocketChannel, @Init("registryAcceptHandler") Handler handler) throws Exception {
+    @Init("FilterReactor")
+    public Reactor filterReactor(@Init("FilterSelector") Selector selector, @Init("FilterServerSocket") ServerSocketChannel serverSocketChannel, @Init("FilterAcceptHandler") Handler handler) throws Exception {
         Reactor reactor = new Reactor(selector);
-        serverSocketChannel.socket().bind(new InetSocketAddress(1013));
+        serverSocketChannel.socket().bind(new InetSocketAddress(1011));
         reactor.register(serverSocketChannel, handler, SelectionKey.OP_ACCEPT);
         return reactor;
     }
 
-    @Init("filterAcceptHandler")
-    public Handler filterAcceptHandler(@Init("FilterSelector") Selector selector, @Init("filterServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, FilterRequestSubmitter submitter) {
+    @Init("FilterAcceptHandler")
+    public Handler filterAcceptHandler(@Init("FilterSelector") Selector selector, @Init("FilterServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, FilterRequestSubmitter submitter) {
         return new AcceptHandler(selector, serverSocketChannel, check, submitter);
     }
 }

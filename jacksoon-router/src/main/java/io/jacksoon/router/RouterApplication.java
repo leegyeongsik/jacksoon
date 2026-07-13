@@ -4,6 +4,7 @@ import io.jacksoon.common.selector.Reactor;
 import io.jacksoon.common.util.CommonWorkerPool;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.router.worker.ConnectionReduceCheckWorker;
+import io.jacksoon.router.worker.FilterWorker;
 import io.jacksoon.router.worker.RegistryCheckWorker;
 import io.jacksoon.router.worker.RouterPipelineWorker;
 
@@ -14,12 +15,14 @@ public class RouterApplication {
     private final CommonWorkerPool<RouterPipelineWorker> routerWorkerPool;
     private final CommonWorkerPool<RegistryCheckWorker> registryCheckWorkerPool;
     private final CommonWorkerPool<ConnectionReduceCheckWorker> connectionReduceCheckWorkerPool;
+    private final CommonWorkerPool<FilterWorker> filterWorkerPool;
 
-    public RouterApplication(@Init("backendReactor") Reactor backendReactor, @Init("clientReactor") Reactor clientReactor, CommonWorkerPool<RouterPipelineWorker> routerWorkerPool, CommonWorkerPool<RegistryCheckWorker> registryCheckWorkerPool, CommonWorkerPool<ConnectionReduceCheckWorker> connectionReduceCheckWorkerPool){        this.backendReactor = backendReactor;
+    public RouterApplication(@Init("backendReactor") Reactor backendReactor, @Init("clientReactor") Reactor clientReactor, CommonWorkerPool<RouterPipelineWorker> routerWorkerPool, CommonWorkerPool<RegistryCheckWorker> registryCheckWorkerPool, CommonWorkerPool<ConnectionReduceCheckWorker> connectionReduceCheckWorkerPool, CommonWorkerPool<FilterWorker> filterWorkerPool){        this.backendReactor = backendReactor;
         this.clientReactor = clientReactor;
         this.routerWorkerPool = routerWorkerPool;
         this.registryCheckWorkerPool = registryCheckWorkerPool;
         this.connectionReduceCheckWorkerPool = connectionReduceCheckWorkerPool;
+        this.filterWorkerPool = filterWorkerPool;
     }
 
     public void start() {
@@ -29,5 +32,6 @@ public class RouterApplication {
         routerWorkerPool.start();
         registryCheckWorkerPool.start();
         connectionReduceCheckWorkerPool.start();
+        filterWorkerPool.start();
     }
 }

@@ -13,84 +13,90 @@ import java.util.logging.Filter;
 @Init
 public class FilterParse implements FilterDepth {
     private final FilterRequestParser requestParser;
-
     public FilterParse(FilterRequestParser requestParser) {
         this.requestParser = requestParser;
-
     }
+    // 이게 레지스트리를 좀더 고도화했으면 분기를 좀더 잘 할수있었을거같은데 그니까 찾을때 string으로 get 해오지말고 레지스트리가 인스턴스를 가지고있는 구조로
+    // 그랬을때 디스패처에서 현재 파이프라인이 이거고 path가 이거일때 인스턴스 이런식으로
 
     @Override
     public void dodo(FilterPipelineContext context) {
-        HttpRequest httpRequest = context.getRequest();
-
+        HttpRequest request = context.getRequest();
         ByteBuffer buffer = context.getByteBuffer().duplicate();
 
-        int headerLength = context.getByteBufferIndex();
-        int requestLength = buffer.limit();
+        parseHeader(buffer, context.getByteBufferIndex(), request);
+        parseBody(buffer, context.getByteBufferIndex(), buffer.limit(), request);
 
-        parseHeader(buffer, headerLength, httpRequest);
-        parseBody(buffer, headerLength, requestLength, httpRequest);
-        context.setFilterUploadRequest(requestParser.parse(context));
-        context.setEvent(httpRequest.getPath());
-    }
+        String method = request.getMethod();
+        String path = request.getPath();
 
-    private void parseHeader(ByteBuffer buffer, int headerLength, HttpRequest httpRequest) {
-        byte[] headerBytes = new byte[headerLength];
-
-        buffer.position(0);
-        buffer.get(headerBytes);
-
-        String header = new String(headerBytes, StandardCharsets.UTF_8);
-
-        String[] lines = header.split("\r\n");
-
-        if (lines.length == 0) {
-            throw new IllegalArgumentException("No request line");
+        if ("GET".equals(method) && "/version".equals(path)) {
+            context.setEvent("version-read");
+            return;
         }
-
-        String[] requestLine = lines[0].trim().split(" ");
-
-        if (requestLine.length < 3) {
-            throw new IllegalArgumentException("Invalid request line: " + lines[0]);
+        if ("GET".equals(method) && "/bundle".equals(path)) {
+            context.setEvent("bundle-read");
+            return;
         }
-
-        httpRequest.setMethod(requestLine[0]);
-        httpRequest.setPath(requestLine[1]);
-        httpRequest.setVersion(requestLine[2]);
-
-        for (int i = 1; i < lines.length; i++) {
-            String line = lines[i];
-
-            if (line.isEmpty()) {
-                break;
-            }
-
-            String[] parts = line.split(":", 2);
-
-            if (parts.length != 2) {
-                continue;
-            }
-
-            httpRequest.getHeaders().put(
-                    parts[0].trim(),
-                    parts[1].trim()
-            );
+        if (("POST".equals(method) || "PUT".equals(method)) && "/filter".equals(path)) {
+            context.setFilterUploadRequest(requestParser.parseUpload(context));
+            context.setEvent("get-lock");
+            return;
         }
-    }
-
-    private void parseBody(ByteBuffer buffer, int headerLength, int requestLength, HttpRequest httpRequest) {
-        int bodyLength = requestLength - headerLength;
-
-        if (bodyLength <= 0) {
-            httpRequest.setBody(new byte[]{});
+        if ("DELETE".equals(method) && "/filter".equals(path)) {
+            context.setFilterName(requestParser.parseFilterName(context));
+            context.setEvent("get-lock");
             return;
         }
 
-        byte[] bodyBytes = new byte[bodyLength];
+        context.getResponse().setStatusCode(404);
+        context.getResponse().setReasonPhrase("Not Found");
+        context.getResponse().setWriteBuffer(ByteBuffer.wrap("Not Found".getBytes(StandardCharsets.UTF_8)));
+        context.getResponse().addHeader("Content-Type", "text/plain; charset=UTF-8");
+        context.setEvent("write");
+    }
 
+    private void parseHeader(ByteBuffer buffer, int headerLength, HttpRequest request) {
+        byte[] headerBytes = new byte[headerLength];
+        buffer.position(0);
+        buffer.get(headerBytes);
+
+        String[] lines = new String(headerBytes, StandardCharsets.UTF_8).split("\\r\\n");
+        if (lines.length == 0) {
+            throw new IllegalArgumentException();
+        }
+
+        String[] requestLine = lines[0].trim().split(" ");
+        if (requestLine.length < 3) {
+            throw new IllegalArgumentException();
+        }
+
+        request.setMethod(requestLine[0].toUpperCase());
+        request.setPath(requestLine[1]);
+        request.setVersion(requestLine[2]);
+
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i];
+            if (line.isEmpty()) {
+                break;
+            }
+            String[] parts = line.split(":", 2);
+            if (parts.length == 2) {
+                request.getHeaders().put(parts[0].trim(), parts[1].trim());
+            }
+        }
+    }
+
+    private void parseBody(ByteBuffer buffer, int headerLength, int requestLength, HttpRequest request) {
+        int bodyLength = requestLength - headerLength;
+        if (bodyLength <= 0) {
+            request.setBody(new byte[0]);
+            return;
+        }
+        byte[] body = new byte[bodyLength];
         buffer.position(headerLength);
-        buffer.get(bodyBytes);
-        httpRequest.setBody(bodyBytes);
+        buffer.get(body);
+        request.setBody(body);
     }
 
     @Override

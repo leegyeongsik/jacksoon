@@ -15,8 +15,7 @@ public class FilterPipelineDispatcher implements PipelineDispatcher<FilterPipeli
         if (before == null) {
             return;
         }
-        PipelineExecutor<FilterPipelineContext> executor =
-                filterPipelineExecutorRegistry.get(before);
+        PipelineExecutor<FilterPipelineContext> executor = filterPipelineExecutorRegistry.get(before);
         executor.execute(context);
         if (before.equals(context.getEvent())) {
             context.setEvent(executor.nextEvent());
