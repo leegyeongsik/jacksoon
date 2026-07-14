@@ -1,5 +1,6 @@
 package io.jacksoon.router.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.common.connection.ConnectionHandlerRegistry;
 import io.jacksoon.common.util.HttpRequestCheck;
 import io.jacksoon.common.util.HttpResponseCheck;
@@ -17,4 +18,9 @@ public class ConnectionConfig {
     public HttpResponseCheck httpResponseCheck() {
         return new HttpResponseCheck();
     }
+    @Init
+    public ObjectMapper objectMapper() {
+        return new ObjectMapper();
+    }
+
 }

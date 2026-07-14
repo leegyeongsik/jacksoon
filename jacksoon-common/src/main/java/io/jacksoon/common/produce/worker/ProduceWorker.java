@@ -20,9 +20,9 @@ public class ProduceWorker<T extends ProduceDto> implements Runnable {
     private final String path;
     private final ObjectMapper objectMapper;
 
-    public ProduceWorker(CommonBlockingQueue<T> queue, HttpClient httpClient, String path, ObjectMapper objectMapper) {
+    public ProduceWorker(CommonBlockingQueue<T> queue, String path, ObjectMapper objectMapper) {
         this.queue = queue;
-        this.httpClient = httpClient;
+        this.httpClient = HttpClient.newBuilder().build();
         this.path = path;
         this.objectMapper = objectMapper;
     }

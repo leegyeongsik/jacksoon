@@ -1,5 +1,8 @@
 package io.jacksoon.router.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jacksoon.common.produce.dto.ProduceDto;
+import io.jacksoon.common.produce.worker.ProduceWorker;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.util.CommonWorkerPool;
 import io.jacksoon.init.annotation.Init;
@@ -14,8 +17,12 @@ import io.jacksoon.router.worker.FilterWorker;
 import io.jacksoon.router.worker.RegistryCheckWorker;
 import io.jacksoon.router.worker.RouterPipelineWorker;
 
+import java.nio.file.Path;
+
 @Init
 public class WorkerPoolConfig {
+    private final String PATH = "localhost:1014/create";
+
     @Init
     public CommonWorkerPool<RouterPipelineWorker> routerPipelineWorkerPool(RouterPipelineTaskExecutor executor, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue) {
         return new CommonWorkerPool<>(1, () -> new RouterPipelineWorker(routerPipelineQueue, executor));
@@ -34,5 +41,10 @@ public class WorkerPoolConfig {
     @Init
     public CommonWorkerPool<FilterWorker> filterWorkerPool(FilterExecutor filterExecutor, FilterRequestSetting filterRequestSetting) {
         return new CommonWorkerPool<>(1, () -> new FilterWorker(filterExecutor, filterRequestSetting, 60_000L));
+    }
+
+    @Init
+    public CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool(CommonBlockingQueue<ProduceDto> queue, ObjectMapper objectMapper) {
+        return new CommonWorkerPool<>(1, () -> new ProduceWorker<>(queue, PATH, objectMapper));
     }
 }
