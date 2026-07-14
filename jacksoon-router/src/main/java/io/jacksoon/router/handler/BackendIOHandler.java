@@ -225,9 +225,7 @@ public class BackendIOHandler extends NioConnectionHandler {
     }
 
     private void completeBackendResponse(ProxyContext proxyContext, ResponseCheckResult result, boolean backendClosed) {
-
-        responseQueue.poll();
-
+        responseQueue.take();
         ByteBuffer responseBuffer = proxyContext.responseBuffer;
         responseBuffer.flip();
         responseBuffer.limit(result.responseLength());
