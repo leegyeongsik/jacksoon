@@ -13,7 +13,7 @@ public class CommonBlockingQueue<T> {
         }
     }
     public void put(T context ){
-        queue.add(context);
+        queue.offer(context);
     }
     public T poll()  {
         try {
