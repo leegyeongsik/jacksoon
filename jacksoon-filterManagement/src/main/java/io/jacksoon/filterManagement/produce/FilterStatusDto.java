@@ -1,4 +1,4 @@
-package io.jacksoon.filterManagement.produce.dto;
+package io.jacksoon.filterManagement.produce;
 
 import io.jacksoon.common.filter.FilterTiming;
 import io.jacksoon.common.filter.PipelineType;
@@ -9,5 +9,6 @@ public record FilterStatusDto(
         FilterTiming timing,
         PipelineType pipeline,
         int order
+
 ) {
 }

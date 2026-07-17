@@ -13,7 +13,7 @@ public class FilterFileCheck implements FilterDepth { // 여기서 java파일이
         context.setEvent(switch (fileType) {
             case JAVA -> "compile";
             case JAR -> "jar-upload";
-            case UNKNOWN -> throw new IllegalArgumentException("지원하지 않는 필터 파일 타입입니다.");
+            case UNKNOWN -> throw new IllegalArgumentException();
         });
     }
 

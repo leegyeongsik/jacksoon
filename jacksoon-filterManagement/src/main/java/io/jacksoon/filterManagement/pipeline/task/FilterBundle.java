@@ -14,7 +14,7 @@ import java.util.Map;
 
 @Init
 public class FilterBundle implements FilterDepth {
-    private  final FilterStore filterStore;
+    private final FilterStore filterStore;
     private final Jar jar;
     public FilterBundle(FilterStore filterStore, Jar jar) {
         this.filterStore = filterStore;

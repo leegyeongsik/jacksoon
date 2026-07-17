@@ -1,4 +1,4 @@
-package io.jacksoon.filterManagement.produce.dto;
+package io.jacksoon.filterManagement.produce;
 
 import io.jacksoon.common.produce.dto.ProduceDto;
 import lombok.AllArgsConstructor;

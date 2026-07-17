@@ -13,7 +13,7 @@ import io.jacksoon.init.annotation.Init;
 
 @Init
 public class WorkerPoolConfig {
-    private final String PATH = "localhost:1014/create";
+    private final String PATH = "localhost:1014/consumer";
     @Init
     public CommonWorkerPool<FilterPipelineWorker> filterPipelineWorkerPool(FilterPipelineTaskExecutor executor, CommonBlockingQueue<FilterPipelineContext> filterPipelineQueue, FilterStore filterStore) {
         return new CommonWorkerPool<>(1, () -> new FilterPipelineWorker(filterPipelineQueue, executor, filterStore));

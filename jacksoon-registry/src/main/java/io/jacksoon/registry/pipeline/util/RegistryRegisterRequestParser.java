@@ -63,11 +63,6 @@ public class RegistryRegisterRequestParser {
         if (endpoint.getHealthPath() == null || endpoint.getHealthPath().isBlank()) {
             endpoint.setHealthPath("/actuator/health");
         }
-
-        if (endpoint.getWeight() <= 0) {
-            endpoint.setWeight(1);
-        }
-
         request.getRules().forEach(rule -> {
             if (rule.getPathPrefix() == null || rule.getPathPrefix().isBlank()) {
                 throw new IllegalArgumentException("rule.pathPrefix is required");

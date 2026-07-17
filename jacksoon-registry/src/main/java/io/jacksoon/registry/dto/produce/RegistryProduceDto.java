@@ -17,6 +17,5 @@ public class RegistryProduceDto extends ProduceDto {
     private int port;
     private String protocol;
     private String healthPath;
-    private int weight;
     private String reason;
 }

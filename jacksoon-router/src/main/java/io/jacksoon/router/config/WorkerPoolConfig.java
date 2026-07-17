@@ -12,16 +12,14 @@ import io.jacksoon.router.filter.FilterExecutor;
 import io.jacksoon.router.filter.FilterRequestSetting;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
 import io.jacksoon.router.pipeline.executor.RouterPipelineTaskExecutor;
-import io.jacksoon.router.worker.ConnectionReduceCheckWorker;
-import io.jacksoon.router.worker.FilterWorker;
-import io.jacksoon.router.worker.RegistryCheckWorker;
-import io.jacksoon.router.worker.RouterPipelineWorker;
+import io.jacksoon.router.produce.dto.ServiceRequest;
+import io.jacksoon.router.worker.*;
 
 import java.nio.file.Path;
 
 @Init
 public class WorkerPoolConfig {
-    private final String PATH = "localhost:1014/create";
+    private final String PATH = "http://localhost:1014/consumer";
 
     @Init
     public CommonWorkerPool<RouterPipelineWorker> routerPipelineWorkerPool(RouterPipelineTaskExecutor executor, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue) {
@@ -46,5 +44,9 @@ public class WorkerPoolConfig {
     @Init
     public CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool(CommonBlockingQueue<ProduceDto> queue, ObjectMapper objectMapper) {
         return new CommonWorkerPool<>(1, () -> new ProduceWorker<>(queue, PATH, objectMapper));
+    }
+    @Init
+    public CommonWorkerPool<ProduceMetricWorker> produceMetricPool(CommonBlockingQueue<ServiceRequest> serviceRequestQueue,CommonBlockingQueue<ProduceDto> produceDtoQueue){
+        return new CommonWorkerPool<>(1,()->new ProduceMetricWorker(serviceRequestQueue,produceDtoQueue));
     }
 }

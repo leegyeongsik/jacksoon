@@ -14,7 +14,7 @@ public class EndPointEventRegistry {
 
     public EndPointEventRegistry(List<EndPointEventExecutorWarrap<EndPointEvent>> executorWarraps) {
         for (EndPointEventExecutorWarrap<EndPointEvent> executorWarrap : executorWarraps) {
-            eventExecutorMap.put(executorWarrap.getEvent(), executorWarrap.getExecutor());
+            eventExecutorMap.put(executorWarrap.event(), executorWarrap.executor());
         }
     }
 

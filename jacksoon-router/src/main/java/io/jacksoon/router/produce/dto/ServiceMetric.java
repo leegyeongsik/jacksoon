@@ -1,4 +1,4 @@
-package io.jacksoon.router.worker;
+package io.jacksoon.router.produce.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -10,8 +10,8 @@ import lombok.Setter;
 @Getter
 @Setter
 public class ServiceMetric {
-    long success;
-    long failure;
+    public long success;
+    public long failure;
 
     public void update(boolean isSuccess){
         if(isSuccess){

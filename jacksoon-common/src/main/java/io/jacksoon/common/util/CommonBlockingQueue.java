@@ -5,22 +5,16 @@ import java.util.concurrent.TimeUnit;
 public class CommonBlockingQueue<T> {
     LinkedBlockingQueue<T> queue= new LinkedBlockingQueue<>();
 
-    public T take()  {
-        try {
-            return queue.take();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+    public T take() throws InterruptedException {
+        return queue.take();
+
     }
     public void put(T context ){
         queue.offer(context);
     }
-    public T poll()  {
-        try {
-            return queue.poll(1000, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+    public T poll() throws InterruptedException {
+        return queue.poll(1000, TimeUnit.SECONDS);
+
     }
     public T peek(){
         return queue.peek();

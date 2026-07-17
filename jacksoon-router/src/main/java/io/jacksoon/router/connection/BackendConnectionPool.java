@@ -154,8 +154,7 @@ public class BackendConnectionPool {
         return Objects.equals(endpoint.getHost(), other.getHost())
                 && endpoint.getPort() == other.getPort()
                 && Objects.equals(endpoint.getProtocol(), other.getProtocol())
-                && Objects.equals(endpoint.getHealthPath(), other.getHealthPath())
-                && endpoint.getWeight() == other.getWeight();
+                && Objects.equals(endpoint.getHealthPath(), other.getHealthPath());
     }
 
     public synchronized void close() {

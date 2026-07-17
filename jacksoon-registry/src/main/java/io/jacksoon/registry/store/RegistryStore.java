@@ -34,7 +34,6 @@ public class RegistryStore {
                 endpoint.getPort(),
                 endpoint.getProtocol(),
                 endpoint.getHealthPath(),
-                endpoint.getWeight(),
                 "pending"
         );
 
@@ -65,8 +64,7 @@ public class RegistryStore {
                                     endpoint.getHost(),
                                     endpoint.getPort(),
                                     endpoint.getProtocol(),
-                                    endpoint.getHealthPath(),
-                                    endpoint.getWeight()
+                                    endpoint.getHealthPath()
                             ))
                             .toList();
 

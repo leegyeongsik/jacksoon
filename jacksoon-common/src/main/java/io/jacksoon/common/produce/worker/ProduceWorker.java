@@ -12,9 +12,9 @@ import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ProduceWorker<T extends ProduceDto> implements Runnable {
-    protected final int batchSize = 500;
-    protected final List<T> buffer = new ArrayList<>();
+public class ProduceWorker<T extends ProduceDto> implements Runnable { // 생각났다 여기서 ProduceDto를 전부 다 받을 수 있냐 아 그래서 wokker를 갖고올때 저걸 다 받게 할 수 있냐
+    protected final int batchSize = 500; // 그래서 큐에 ProduceDto를 걸어 놓고 저거를 받게 할 수 있냐 받게할수있지 queue는 뭘 주입받지않고 타입만 생성하니까
+    protected final List<T> buffer = new ArrayList<>(); // 그리고 주입받는다고 하더라도 t랑 상관없지 인터페이스를 걸어놔서 주입받게 하더라도 인터페이스에 연관된거 다 갖과어서 체크해서 주입하니까
     protected final CommonBlockingQueue<T> queue;
     private final HttpClient httpClient;
     private final String path;
