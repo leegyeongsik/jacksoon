@@ -9,7 +9,7 @@ import java.util.Map;
 public class PipelineExecutorRegistry<T extends PipelineContext> {
     private final Map<String, PipelineExecutor<T>> executorMap = new HashMap<>();
 
-    public PipelineExecutorRegistry(List<? extends PipelineExecutor<T>> executors) {
+    public PipelineExecutorRegistry(List<PipelineExecutor<T>> executors) {
         for (PipelineExecutor<T> executor : executors) {
             String event = executor.currentEvent();
 

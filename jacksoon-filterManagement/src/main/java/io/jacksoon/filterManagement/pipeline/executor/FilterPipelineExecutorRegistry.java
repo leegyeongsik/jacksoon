@@ -9,7 +9,7 @@ import java.util.List;
 
 @Init
 public class FilterPipelineExecutorRegistry extends PipelineExecutorRegistry<FilterPipelineContext> {
-    public FilterPipelineExecutorRegistry(List<? extends PipelineExecutor<FilterPipelineContext>> pipelineExecutors) {
+    public FilterPipelineExecutorRegistry(List<PipelineExecutor<FilterPipelineContext>> pipelineExecutors) {
         super(pipelineExecutors);
     }
 }
