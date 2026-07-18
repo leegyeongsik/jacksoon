@@ -31,19 +31,27 @@ public class ProduceWorker<T extends ProduceDto> implements Runnable { // 생각
     public void run() {
         try {
             while (!Thread.currentThread().isInterrupted()) {
-                T dto = queue.poll();
-                if (dto != null) {
-                    buffer.add(dto);
-                }
-                boolean sizeTrigger = buffer.size() >= batchSize;
-                boolean timeoutTrigger = dto == null && !buffer.isEmpty();
-                if (sizeTrigger || timeoutTrigger) {
-                    flush();
+                try {
+                    T dto = queue.poll();
+                    if (dto != null) {
+                        buffer.add(dto);
+                    }
+                    boolean sizeTrigger = buffer.size() >= batchSize;
+                    boolean timeoutTrigger = dto == null && !buffer.isEmpty();
+                    if (sizeTrigger || timeoutTrigger) {
+                        flush();
+                    }
+                } catch (Exception e) {
+                    // 여기서 파일로 저장해놓는다던지 그런식으로 처리해야할듯
                 }
             }
-        } catch (Exception e) {
         } finally {
-            flush();
+            try {
+                flush();
+            } catch (Exception e) {
+                // 여기서 파일로 저장해놓는다던지 그런식으로 처리해야할듯 얘도
+                buffer.clear();
+            }
         }
     }
     protected void flush() {
@@ -53,7 +61,6 @@ public class ProduceWorker<T extends ProduceDto> implements Runnable { // 생각
         List<T> batch = new ArrayList<>(buffer);
 
         saveAll(batch);
-
         buffer.subList(0, batch.size()).clear();
     }
     public void saveAll(List<T> batch) {
