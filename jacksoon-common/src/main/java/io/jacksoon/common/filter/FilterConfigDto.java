@@ -5,7 +5,6 @@ public record FilterConfigDto(
         String className,
         FilterTiming timing,
         PipelineType pipeline,
-        String path,
         int order,
         FilterFileType filterFileType
 ) {
@@ -31,13 +30,5 @@ public record FilterConfigDto(
         if (filterFileType == null || filterFileType == FilterFileType.UNKNOWN) {
             throw new IllegalArgumentException();
         }
-        path = normalizePath(path);
-    }
-    private static String normalizePath(String path) {
-        if (path == null || path.isBlank()) {
-            return null;
-        }
-        String trimmed = path.trim();
-        return trimmed.startsWith("/") ? trimmed : "/" + trimmed;
     }
 }

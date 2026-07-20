@@ -4,6 +4,9 @@ import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.worker.Executor;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
 
+import java.io.IOException;
+import java.nio.channels.SelectionKey;
+
 public class RouterPipelineWorker implements Runnable {
     Executor<RouterPipelineContext> executor;
     CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue;
@@ -14,15 +17,32 @@ public class RouterPipelineWorker implements Runnable {
     @Override
     public void run() {
         while (!Thread.currentThread().isInterrupted()) {
+            RouterPipelineContext context = null;
             try {
-                RouterPipelineContext context = routerPipelineQueue.take();
+                context = routerPipelineQueue.take();
                 executor.execute(context);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
             } catch (RuntimeException e) {
                 e.printStackTrace();
+                if (context != null) {
+                    closeClient(context.getSelectionKey());
+                }
             }
+        }
+    }
+    private void closeClient(SelectionKey selectionKey) {
+        if (selectionKey == null) {
+            return;
+        }
+        try {
+            selectionKey.cancel();
+        } catch (RuntimeException ignored) {
+        }
+        try {
+            selectionKey.channel().close();
+        } catch (IOException ignored) {
         }
     }
 }

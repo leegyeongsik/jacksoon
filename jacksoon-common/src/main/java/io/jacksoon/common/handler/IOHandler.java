@@ -78,6 +78,7 @@ public class IOHandler implements Handler {
         requestBuffer.flip();
         requestBuffer.limit(result.requestLength());
         ByteBuffer requestSlice = requestBuffer.slice();
+        selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_READ);
         requestSubmitter.submit(socketChannel, requestSlice, result.headerLength(), bufferContext, selectionKey);
         return true;
     }
@@ -103,6 +104,7 @@ public class IOHandler implements Handler {
             return;
         }
         bufferContext.setResponseBuffer(ByteBuffer.allocate(0));
+        bufferContext.getRequestBuffer().clear();
         selectionKey.interestOps(SelectionKey.OP_READ);
     }
 }

@@ -12,5 +12,4 @@ public class EndpointInfo {
     private int port;
     private String protocol;
     private String healthPath;
-    private int weight;
 }

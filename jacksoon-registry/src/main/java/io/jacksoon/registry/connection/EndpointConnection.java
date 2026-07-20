@@ -14,18 +14,11 @@ public class EndpointConnection {
     private final String host;
     private final int port;
     private final String healthPath;
-
     @Setter
     private ByteBuffer requestBuffer;
-
     private final ByteBuffer responseBuffer = ByteBuffer.allocate(4096);
-
     @Setter
     private boolean connected;
-
-    @Setter
-    private int failCount;
-
     public EndpointConnection(String key, String serviceName, String instanceId, String host, int port, String healthPath) {
         this.key = key;
         this.serviceName = serviceName;
@@ -40,10 +33,7 @@ public class EndpointConnection {
                 "Host: " + host + ":" + port + "\r\n" +
                 "Connection: keep-alive\r\n" +
                 "\r\n";
-
-        this.requestBuffer = ByteBuffer.wrap(
-                request.getBytes(StandardCharsets.UTF_8)
-        );
+        this.requestBuffer = ByteBuffer.wrap(request.getBytes(StandardCharsets.UTF_8));
     }
 
     public void clearResponseBuffer() {

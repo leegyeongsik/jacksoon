@@ -5,17 +5,17 @@ import io.jacksoon.init.annotation.Init;
 
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 
 @Init
 public class Compile {
+
     private final Path workRoot = Path.of("plugins/work");
 
-    public Path compile(byte[] sourceBytes, FilterConfigDto config, long version) {
+    public void compile(byte[] sourceBytes, FilterConfigDto config, long version) {
         validate(sourceBytes, config, version);
         Path filterRoot = workRoot.resolve(String.valueOf(version)).resolve(config.filterName());
         Path sourceRoot = filterRoot.resolve("src");
@@ -26,30 +26,28 @@ public class Compile {
             Files.createDirectories(javaFile.getParent());
             Files.createDirectories(classRoot);
             Files.write(javaFile, sourceBytes);
-            JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
-            if (compiler == null) {
-                throw new IllegalStateException();
-            }
+            compileSource(javaFile, classRoot);
+        } catch (IOException exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
 
-            ByteArrayOutputStream errorOutput = new ByteArrayOutputStream();
-            int result;
-            try (PrintStream errorStream = new PrintStream(errorOutput)) {
-                result = compiler.run(
-                        null,
-                        null,
-                        errorStream,
-                        "-encoding", "UTF-8",
-                        "-classpath", System.getProperty("java.class.path"),
-                        "-d", classRoot.toString(),
-                        javaFile.toString()
-                );
-            }
-
-            if (result != 0) {
-                throw new IllegalStateException();
-            }
-            return classRoot;
-        } catch (IOException e) {
+    private void compileSource(Path javaFile, Path classRoot) {
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        if (compiler == null) {
+            throw new IllegalStateException();
+        }
+        int result = compiler.run(
+                null,
+                null,
+                null,
+                "-encoding", "UTF-8",
+                "-classpath", System.getProperty("java.class.path"),
+                "-proc:none",
+                "-d", classRoot.toString(),
+                javaFile.toString()
+        );
+        if (result != 0) {
             throw new IllegalStateException();
         }
     }
@@ -63,7 +61,7 @@ public class Compile {
             return;
         }
         try (var paths = Files.walk(root)) {
-            for (Path path : paths.sorted((left, right) -> right.compareTo(left)).toList()) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
                 Files.deleteIfExists(path);
             }
         }

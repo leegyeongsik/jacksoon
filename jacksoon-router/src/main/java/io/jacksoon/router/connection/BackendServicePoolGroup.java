@@ -26,14 +26,14 @@ class BackendServicePoolGroup {
 
             BackendConnectionPool pool = endpointPoolMap.get(instanceId);
 
-            if (pool == null) {
-                endpointPoolMap.put(instanceId, new BackendConnectionPool(serviceName, endpoint, connectionFactory));
+            if (pool == null) { // 풀하나가 인스턴스임 풀안에 커넥션풀
+                endpointPoolMap.put(instanceId, new BackendConnectionPool(serviceName,endpoint, connectionFactory));
                 continue;
             }
 
             if (!pool.sameEndpoint(endpoint)) {
                 pool.close();
-                endpointPoolMap.put(instanceId, new BackendConnectionPool(serviceName, endpoint, connectionFactory));
+                endpointPoolMap.put(instanceId, new BackendConnectionPool(serviceName,endpoint, connectionFactory));
             }
         }
 

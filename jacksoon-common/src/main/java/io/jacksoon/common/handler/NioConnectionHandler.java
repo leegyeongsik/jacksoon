@@ -13,7 +13,6 @@ public abstract class NioConnectionHandler implements Handler, AutoCloseable {
     protected NioConnectionHandler(Selector selector, SocketChannel socketChannel, int interestOps) {
         this.selector = selector;
         this.socketChannel = socketChannel;
-
         try {
             this.selectionKey = socketChannel.register(selector, interestOps);
             this.selectionKey.attach(this);
@@ -23,33 +22,13 @@ public abstract class NioConnectionHandler implements Handler, AutoCloseable {
             throw new RuntimeException(e);
         }
     }
-
-    protected void addInterestOps(int ops) {
-        if (!selectionKey.isValid()) {
-            return;
-        }
-
-        selectionKey.interestOps(selectionKey.interestOps() | ops);
-        selector.wakeup();
-    }
-
     protected void setInterestOps(int ops) {
         if (!selectionKey.isValid()) {
             return;
         }
-
         selectionKey.interestOps(ops);
         selector.wakeup();
     }
-
-    protected void removeInterestOps(int ops) {
-        if (!selectionKey.isValid()) {
-            return;
-        }
-        selectionKey.interestOps(selectionKey.interestOps() & ~ops);
-        selector.wakeup();
-    }
-
     @Override
     public void close() {
         try {
@@ -59,7 +38,6 @@ public abstract class NioConnectionHandler implements Handler, AutoCloseable {
 
         closeSocketOnly();
     }
-
     private void closeSocketOnly() {
         try {
             socketChannel.close();

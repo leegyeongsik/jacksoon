@@ -1,14 +1,14 @@
 package io.jacksoon.common.registry.dto.response;
 
-import java.util.List;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+import java.util.List;
+@Setter
+@NoArgsConstructor
 public class ServiceSnapshot {
     private String serviceName;
     private List<EndpointSnapshot> endpoints;
-
-    public ServiceSnapshot() {
-    }
-
     public ServiceSnapshot(String serviceName, List<EndpointSnapshot> endpoints) {
         this.serviceName = serviceName;
         this.endpoints = endpoints;

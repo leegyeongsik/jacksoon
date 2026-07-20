@@ -10,11 +10,9 @@ import java.util.HashMap;
 @Init
 public class FilterGetLock implements FilterDepth {
     private final FilterStore filterStore;
-
     public FilterGetLock(FilterStore filterStore) {
         this.filterStore = filterStore;
     }
-
     @Override
     public void dodo(FilterPipelineContext context) {
         filterStore.beginUpdate();
@@ -28,7 +26,6 @@ public class FilterGetLock implements FilterDepth {
             context.setEvent("file-check");
         }
     }
-
     @Override
     public String currentEvent() {
         return "get-lock";

@@ -1,5 +1,6 @@
 package io.jacksoon.filterManagement.pipeline.parse;
 
+import io.jacksoon.common.filter.FilterUploadRequest;
 import io.jacksoon.common.pipeline.context.HttpRequest;
 import io.jacksoon.filterManagement.pipeline.context.FilterPipelineContext;
 import io.jacksoon.filterManagement.pipeline.depth.FilterDepth;
@@ -8,7 +9,6 @@ import io.jacksoon.init.annotation.Init;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.logging.Filter;
 
 @Init
 public class FilterParse implements FilterDepth {
@@ -17,7 +17,8 @@ public class FilterParse implements FilterDepth {
         this.requestParser = requestParser;
     }
     // 이게 레지스트리를 좀더 고도화했으면 분기를 좀더 잘 할수있었을거같은데 그니까 찾을때 string으로 get 해오지말고 레지스트리가 인스턴스를 가지고있는 구조로
-    // 그랬을때 디스패처에서 현재 파이프라인이 이거고 path가 이거일때 인스턴스 이런식으로
+    // 그랬을때 디스패처에서 현재 파이프라인이 이거고 path가 이거일때 인스턴스 가령 paser일때 path가 a다 그러면 그걸로 파이프라인 찾아서 실행하고 즉 event로 set해서 path를 덮지않게끔
+    // paser -> a , b , c a는 aa파이프로 b는 bb파이프로 c는 cc파이프로 a가 aa로 갔을때 거기서는 이제 aaa파이프로 그런식으로 객체를 넣어놓고 그걸로 실행하게끔 했던게 더 나았을듯
 
     @Override
     public void dodo(FilterPipelineContext context) {
@@ -29,7 +30,6 @@ public class FilterParse implements FilterDepth {
 
         String method = request.getMethod();
         String path = request.getPath();
-
         if ("GET".equals(method) && "/version".equals(path)) {
             context.setEvent("version-read");
             return;
@@ -39,7 +39,9 @@ public class FilterParse implements FilterDepth {
             return;
         }
         if (("POST".equals(method) || "PUT".equals(method)) && "/filter".equals(path)) {
-            context.setFilterUploadRequest(requestParser.parseUpload(context));
+            FilterUploadRequest uploadRequest = requestParser.parseUpload(context);
+            context.setFilterUploadRequest(uploadRequest);
+            context.setFilterName(uploadRequest.config().filterName());
             context.setEvent("get-lock");
             return;
         }
@@ -48,14 +50,12 @@ public class FilterParse implements FilterDepth {
             context.setEvent("get-lock");
             return;
         }
-
         context.getResponse().setStatusCode(404);
         context.getResponse().setReasonPhrase("Not Found");
         context.getResponse().setWriteBuffer(ByteBuffer.wrap("Not Found".getBytes(StandardCharsets.UTF_8)));
         context.getResponse().addHeader("Content-Type", "text/plain; charset=UTF-8");
         context.setEvent("write");
     }
-
     private void parseHeader(ByteBuffer buffer, int headerLength, HttpRequest request) {
         byte[] headerBytes = new byte[headerLength];
         buffer.position(0);

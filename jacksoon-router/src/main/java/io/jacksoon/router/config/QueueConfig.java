@@ -1,9 +1,11 @@
 package io.jacksoon.router.config;
 
+import io.jacksoon.common.produce.dto.ProduceDto;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.connection.ConnectionContext;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
+import io.jacksoon.router.produce.dto.ServiceRequest;
 
 @Init
 public class QueueConfig {
@@ -16,4 +18,17 @@ public class QueueConfig {
     public CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue() {
         return new CommonBlockingQueue<>();
     }
+    @Init
+    public CommonBlockingQueue<ProduceDto> produceDtoQueue() {
+        return new CommonBlockingQueue<>();
+    }
+    @Init("serviceMetricQueue")
+    public CommonBlockingQueue<ServiceRequest> serviceRequestQueue() {
+        return new CommonBlockingQueue<>();
+    }
+    @Init("filterMetricQueue")
+    public CommonBlockingQueue<ServiceRequest> filterRequestQueue() {
+        return new CommonBlockingQueue<>();
+    }
+
 }

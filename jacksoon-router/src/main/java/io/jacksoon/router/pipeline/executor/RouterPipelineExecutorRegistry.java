@@ -8,7 +8,7 @@ import io.jacksoon.router.pipeline.context.RouterPipelineContext;
 import java.util.List;
 @Init
 public class RouterPipelineExecutorRegistry extends PipelineExecutorRegistry<RouterPipelineContext> {
-    public RouterPipelineExecutorRegistry(List<? extends PipelineExecutor<RouterPipelineContext>> pipelineExecutors) {
+    public RouterPipelineExecutorRegistry(List<PipelineExecutor<RouterPipelineContext> > pipelineExecutors) {
         super(pipelineExecutors);
     }
 }

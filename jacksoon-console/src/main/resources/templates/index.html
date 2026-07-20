@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jacksoon Console | Services</title>
+    <link rel="stylesheet" th:href="@{/css/console.css}">
+</head>
+<body>
+<div class="app-shell">
+    <aside class="sidebar">
+        <a class="brand" th:href="@{/}">
+            <span class="brand-mark">J</span>
+            <span>
+                <strong>Jacksoon</strong>
+                <small>Router Console</small>
+            </span>
+        </a>
+
+        <nav class="nav-menu">
+            <a class="nav-item active" th:href="@{/}">
+                <span>▦</span>
+                서비스 관리
+            </a>
+            <a class="nav-item" th:href="@{/filter}">
+                <span>⚙</span>
+                필터 관리
+            </a>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header class="page-header">
+            <div>
+                <p class="eyebrow">ROUTER OVERVIEW</p>
+                <h1>서비스 관리</h1>
+                <p class="page-description">등록된 서비스와 인스턴스, 라우팅 규칙, 요청 처리 현황을 확인합니다.</p>
+            </div>
+
+            <div class="header-summary">
+                <span>등록 서비스</span>
+                <strong th:text="${#lists.size(services)}">0</strong>
+            </div>
+        </header>
+
+        <section class="empty-state" th:if="${#lists.isEmpty(services)}">
+            <div class="empty-icon">⌁</div>
+            <h2>등록된 서비스가 없습니다</h2>
+            <p>Registry 서버에서 서비스가 등록되면 이곳에 표시됩니다.</p>
+        </section>
+
+        <section class="card-list" th:unless="${#lists.isEmpty(services)}">
+            <details class="service-card" th:each="service : ${services}" open>
+                <summary class="service-summary">
+                    <div class="service-title-group">
+                        <div class="service-icon"
+                             th:text="${#strings.isEmpty(service.serviceName) ? '?' : #strings.substring(service.serviceName, 0, 1).toUpperCase()}">S</div>
+                        <div>
+                            <div class="title-line">
+                                <h2 th:text="${service.serviceName}">service-name</h2>
+                                <span class="status-badge">REGISTERED</span>
+                            </div>
+                            <p>
+                                Service ID
+                                <strong th:text="${service.serviceId}">1</strong>
+                                · 인스턴스
+                                <strong th:text="${#lists.size(service.serviceInstanceDto)}">0</strong>개
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="metric-group">
+                        <div class="metric success">
+                            <span>성공</span>
+                            <strong th:text="${#numbers.formatInteger(service.success, 0, 'COMMA')}">0</strong>
+                        </div>
+                        <div class="metric failure">
+                            <span>실패</span>
+                            <strong th:text="${#numbers.formatInteger(service.failure, 0, 'COMMA')}">0</strong>
+                        </div>
+                        <span class="expand-icon">⌄</span>
+                    </div>
+                </summary>
+
+                <div class="service-detail">
+                    <div class="detail-section">
+                        <div class="section-heading">
+                            <div>
+                                <p class="section-kicker">INSTANCES</p>
+                                <h3>서비스 인스턴스</h3>
+                            </div>
+                            <span class="count-badge"
+                                  th:text="${#lists.size(service.serviceInstanceDto)} + '개'">0개</span>
+                        </div>
+
+                        <div class="table-wrapper" th:unless="${#lists.isEmpty(service.serviceInstanceDto)}">
+                            <table>
+                                <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Instance ID</th>
+                                    <th>Address</th>
+                                    <th>Protocol</th>
+                                    <th>Health Path</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="instance : ${service.serviceInstanceDto}">
+                                    <td th:text="${instance.serviceInstanceId}">1</td>
+                                    <td><code th:text="${instance.instanceId}">instance-1</code></td>
+                                    <td>
+                                        <a th:href="|${instance.protocol}://${instance.host}:${instance.port}|"
+                                           th:text="|${instance.host}:${instance.port}|"
+                                           target="_blank"
+                                           rel="noopener noreferrer">localhost:8080</a>
+                                    </td>
+                                    <td><span class="protocol-badge" th:text="${instance.protocol}">HTTP</span></td>
+                                    <td><code th:text="${instance.healthPath ?: '-'}">/health</code></td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p class="inline-empty" th:if="${#lists.isEmpty(service.serviceInstanceDto)}">
+                            현재 연결된 인스턴스가 없습니다.
+                        </p>
+                    </div>
+
+                    <div class="detail-section rule-section">
+                        <div class="section-heading">
+                            <div>
+                                <p class="section-kicker">ROUTING RULE</p>
+                                <h3>라우팅 규칙</h3>
+                            </div>
+                        </div>
+
+                        <div class="rule-list" th:unless="${#lists.isEmpty(service.ruleDtos)}">
+                            <div class="rule-grid" th:each="rule : ${service.ruleDtos}">
+                                <div class="info-box">
+                                    <span>Rule ID</span>
+                                    <strong th:text="${rule.serviceRuleId}">1</strong>
+                                </div>
+                                <div class="info-box wide">
+                                    <span>Path Prefix</span>
+                                    <code th:text="${rule.pathPrefix}">/api/service</code>
+                                </div>
+                                <div class="info-box">
+                                    <span>Strip Prefix</span>
+                                    <strong th:text="${rule.stripPrefix ? 'ON' : 'OFF'}">OFF</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p class="inline-empty" th:if="${#lists.isEmpty(service.ruleDtos)}">
+                            등록된 라우팅 규칙이 없습니다.
+                        </p>
+                    </div>
+                </div>
+            </details>
+        </section>
+    </main>
+</div>
+</body>
+</html>
