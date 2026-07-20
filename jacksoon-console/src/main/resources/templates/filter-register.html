@@ -34,7 +34,7 @@
             <div>
                 <p class="eyebrow">REGISTER FILTER</p>
                 <h1>필터 등록</h1>
-                <p class="page-description">컴파일된 Java 필터 클래스 파일을 Console에 등록합니다.</p>
+                <p class="page-description">Java 필터 소스 파일을 Console에 등록합니다.</p>
             </div>
 
             <a class="secondary-link-button" th:href="@{/filter}">← 필터 목록</a>
@@ -48,11 +48,11 @@
 
         <section class="register-card">
             <div class="upload-copy register-copy">
-                <p class="section-kicker">CLASS UPLOAD</p>
-                <h2>.class 파일 업로드</h2>
+                <p class="section-kicker">JAVA SOURCE UPLOAD</p>
+                <h2>.java 파일 업로드</h2>
                 <p>
-                    필터 이름과 실행 스테이지, 순서를 지정한 뒤 컴파일된
-                    <code>.class</code> 파일을 선택하세요.
+                    필터 이름과 FQCN, 실행 스테이지, 순서를 지정한 뒤
+                    <code>.java</code> 파일을 선택하세요.
                 </p>
             </div>
 
@@ -67,6 +67,16 @@
                            placeholder="예: AuthenticationFilter"
                            autocomplete="off"
                            required>
+                </label>
+
+                <label class="form-field">
+                    <span>필터 클래스 FQCN</span>
+                    <input type="text"
+                           name="className"
+                           placeholder="예: io.jacksoon.filters.AuthenticationFilter"
+                           autocomplete="off"
+                           required>
+                    <small class="field-help">package와 클래스명을 합친 전체 이름입니다.</small>
                 </label>
 
                 <label class="form-field">
@@ -99,15 +109,15 @@
                     <small class="field-help">숫자가 작을수록 먼저 실행됩니다.</small>
                 </label>
 
-                <label class="file-drop-zone" for="classFile">
+                <label class="file-drop-zone" for="sourceFile">
                     <input type="file"
-                           id="classFile"
-                           name="classFile"
-                           accept=".class,application/java-vm"
+                           id="sourceFile"
+                           name="sourceFile"
+                           accept=".java,text/x-java-source,text/plain"
                            required>
                     <span class="file-icon">⇧</span>
-                    <strong>.class 파일 선택</strong>
-                    <small id="selectedFileName">클릭하여 컴파일된 필터 클래스 파일을 선택하세요.</small>
+                    <strong>.java 파일 선택</strong>
+                    <small id="selectedFileName">클릭하여 Java 필터 소스 파일을 선택하세요.</small>
                 </label>
 
                 <div class="form-actions">
@@ -120,14 +130,14 @@
 </div>
 
 <script>
-    const classFileInput = document.getElementById("classFile");
+    const sourceFileInput = document.getElementById("sourceFile");
     const selectedFileName = document.getElementById("selectedFileName");
 
-    classFileInput.addEventListener("change", () => {
-        const selectedFile = classFileInput.files[0];
+    sourceFileInput.addEventListener("change", () => {
+        const selectedFile = sourceFileInput.files[0];
         selectedFileName.textContent = selectedFile
             ? selectedFile.name
-            : "클릭하여 컴파일된 필터 클래스 파일을 선택하세요.";
+            : "클릭하여 Java 필터 소스 파일을 선택하세요.";
     });
 </script>
 </body>

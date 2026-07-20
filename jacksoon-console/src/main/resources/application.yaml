@@ -1,7 +1,8 @@
+server:
+  port: 1014
 spring:
   application:
     name: jacksoon-console
-  port: 1014
   datasource:
     url: jdbc:postgresql://localhost:5432/jacksoon_console
     username: postgres
@@ -13,3 +14,6 @@ spring:
     properties:
       hibernate:
         format_sql: true
+filter:
+  server:
+    url: ${FILTER_SERVER_URL:http://localhost:1011/filter}

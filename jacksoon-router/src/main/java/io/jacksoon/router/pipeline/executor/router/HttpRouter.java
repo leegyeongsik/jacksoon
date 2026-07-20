@@ -19,6 +19,7 @@ public class HttpRouter implements RouterDepth {
 
     @Override
     public void dodo(RouterPipelineContext context) {
+        // 여기서 라우터에서 찐빠난 예외
         RoutingTarget target = findRouter.find(context.getRequest());
 
         ByteBuffer backendRequestBuffer = requestRewriter.rewritePath(
@@ -27,7 +28,6 @@ public class HttpRouter implements RouterDepth {
                 target.getBackendPath(),
                 context.getRequest().getVersion()
         );
-
         target.getPool().send(new ProxyContext(backendRequestBuffer, context.getBufferContext(), context.getSelectionKey()));
     }
 

@@ -1,6 +1,11 @@
 package io.jacksoon.registry.store;
 
+import io.jacksoon.common.produce.dto.ProduceDto;
+import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.init.annotation.Init;
+import io.jacksoon.registry.dto.produce.RegistryAction;
+import io.jacksoon.registry.dto.produce.RegistryProduceRule;
+import io.jacksoon.registry.dto.produce.RegistryRuleProduceDto;
 import io.jacksoon.registry.dto.request.EndpointInfo;
 import io.jacksoon.registry.dto.request.RegistryRegisterRequest;
 import io.jacksoon.registry.dto.request.RouteRule;
@@ -21,9 +26,14 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RegistryStore {
     private final Map<String, RegisteredService> serviceMap = new ConcurrentHashMap<>();
     private final List<RegisteredRouteRule> routeRules = new ArrayList<>();
+    private final CommonBlockingQueue<ProduceDto> produceDtoQueue;
+
+    public RegistryStore(CommonBlockingQueue<ProduceDto> produceDtoQueue) {
+        this.produceDtoQueue = produceDtoQueue;
+    }
 
     public synchronized void add(RegistryRegisterRequest request) {
-        RegisteredService service = serviceMap.computeIfAbsent(request.getServiceName(), RegisteredService::new);
+        RegisteredService service = serviceMap.computeIfAbsent(request.getServiceName(), serviceName -> new RegisteredService(serviceName, produceDtoQueue));
 
         EndpointInfo endpoint = request.getEndpoint();
 
@@ -41,12 +51,13 @@ public class RegistryStore {
 
         if (request.getRules() != null && !request.getRules().isEmpty()) {
             removeOldRules(request.getServiceName());
-
+            List<RegistryRuleProduceDto> registeredRouteRules = new ArrayList<>();
             for (RouteRule rule : request.getRules()) {
                 RegisteredRouteRule registeredRouteRule = new RegisteredRouteRule(request.getServiceName(), rule.getPathPrefix(), rule.isStripPrefix());
-
                 routeRules.add(registeredRouteRule);
+                registeredRouteRules.add(new RegistryRuleProduceDto(rule.getPathPrefix(), rule.isStripPrefix()));
             }
+            produceDtoQueue.put(new RegistryProduceRule(request.getServiceName(), RegistryAction.REGISTER_RULE, registeredRouteRules));
         }
     }
 

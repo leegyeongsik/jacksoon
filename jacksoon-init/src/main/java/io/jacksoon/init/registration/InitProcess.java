@@ -62,6 +62,10 @@ public class InitProcess {
         TypeMetadata child = metadata.getActualTypeArguments().isEmpty()
                 ? new TypeMetadata(Object.class, Object.class, List.of(), false, List.of())
                 : metadata.getActualTypeArguments().getFirst();
+        if (child.isWildcard() && !child.getUpperBounds().isEmpty()) {
+            child = child.getUpperBounds().getFirst();
+        }
+
         List<Object> result = new ArrayList<>();
         if (isContainerType(child.getRawType())) {
             result.add(resolveByType(child));

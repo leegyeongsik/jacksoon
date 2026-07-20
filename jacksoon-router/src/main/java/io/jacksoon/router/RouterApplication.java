@@ -16,15 +16,26 @@ public class RouterApplication {
     private final CommonWorkerPool<ConnectionReduceCheckWorker> connectionReduceCheckWorkerPool;
     private final CommonWorkerPool<FilterWorker> filterWorkerPool;
     private final CommonWorkerPool<ProduceWorker<ProduceDto>> produceDtoPool;
-    private final CommonWorkerPool<ProduceMetricWorker> metricWorkerPool;
-    public RouterApplication(@Init("backendReactor") Reactor backendReactor, @Init("clientReactor") Reactor clientReactor, CommonWorkerPool<RouterPipelineWorker> routerWorkerPool, CommonWorkerPool<RegistryCheckWorker> registryCheckWorkerPool, CommonWorkerPool<ConnectionReduceCheckWorker> connectionReduceCheckWorkerPool, CommonWorkerPool<FilterWorker> filterWorkerPool, CommonWorkerPool<ProduceWorker<ProduceDto>> produceDtoPool, CommonWorkerPool<ProduceMetricWorker> metricWorkerPool){        this.backendReactor = backendReactor;
+    private final CommonWorkerPool<ProduceMetricWorker> serviceMetricWorkerPool;
+    private final CommonWorkerPool<ProduceMetricWorker> filterMetricWorkerPool;
+    public RouterApplication(@Init("backendReactor") Reactor backendReactor,
+                             @Init("clientReactor") Reactor clientReactor,
+                             CommonWorkerPool<RouterPipelineWorker> routerWorkerPool,
+                             CommonWorkerPool<RegistryCheckWorker> registryCheckWorkerPool,
+                             CommonWorkerPool<ConnectionReduceCheckWorker> connectionReduceCheckWorkerPool,
+                             CommonWorkerPool<FilterWorker> filterWorkerPool,
+                             CommonWorkerPool<ProduceWorker<ProduceDto>> produceDtoPool,
+                             @Init("serviceMetricPool")CommonWorkerPool<ProduceMetricWorker> serviceMetricWorkerPool,
+                             @Init("filterMetricPool")CommonWorkerPool<ProduceMetricWorker> filterMetricWorkerPool) {
+        this.backendReactor = backendReactor;
         this.clientReactor = clientReactor;
         this.routerWorkerPool = routerWorkerPool;
         this.registryCheckWorkerPool = registryCheckWorkerPool;
         this.connectionReduceCheckWorkerPool = connectionReduceCheckWorkerPool;
         this.filterWorkerPool = filterWorkerPool;
         this.produceDtoPool = produceDtoPool;
-        this.metricWorkerPool = metricWorkerPool;
+        this.serviceMetricWorkerPool = serviceMetricWorkerPool;
+        this.filterMetricWorkerPool = filterMetricWorkerPool;
     }
 
     public void start() {
@@ -36,6 +47,7 @@ public class RouterApplication {
         connectionReduceCheckWorkerPool.start();
         filterWorkerPool.start();
         produceDtoPool.start();
-        metricWorkerPool.start();
+        serviceMetricWorkerPool.start();
+        filterMetricWorkerPool.start();
     }
 }

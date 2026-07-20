@@ -5,4 +5,5 @@ public enum ProduceHint {
     FILTER,
     ROUTER_METRIC,
     FILTER_METRIC,
+    SERVICE_RULE
 }

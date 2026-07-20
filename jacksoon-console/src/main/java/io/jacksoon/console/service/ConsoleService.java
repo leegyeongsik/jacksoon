@@ -34,13 +34,23 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class ConsoleService {
+    private static final long MAX_JAVA_SOURCE_SIZE = 1024L * 1024L;
+    private static final Pattern FILTER_NAME_PATTERN = Pattern.compile("[a-zA-Z0-9._-]+");
+    private static final Pattern CLASS_NAME_PATTERN = Pattern.compile("[a-zA-Z_$][a-zA-Z0-9_$]*(\\.[a-zA-Z_$][a-zA-Z0-9_$]*)*");
+    private static final Pattern PACKAGE_PATTERN = Pattern.compile("(?m)^\\s*package\\s+([a-zA-Z_$][a-zA-Z0-9_$]*(?:\\.[a-zA-Z_$][a-zA-Z0-9_$]*)*)\\s*;");
+    private static final Pattern CLASS_PATTERN = Pattern.compile("\\bclass\\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\\b");
     private final ConsoleRepository consoleRepository;
     private final HttpClient httpClient = HttpClient.newBuilder().build();
     private final FilterClassRepository filterClassRepository;
@@ -67,11 +77,7 @@ public class ConsoleService {
     @Transactional
     public void registerService(ServiceProduceDto dto) {
         Services service = getOrCreateService(dto.getServiceName());
-        List<InstanceProduceDto> instances = dto.getRegistryInstanceDtoList();
-        for (InstanceProduceDto instanceDto : instances) {
-            registerServiceInstance(service.getServiceId(), instanceDto);
-        }
-        replaceServiceRules(service.getServiceId(), dto.getRegistryRuleDtoList());
+        registerServiceInstance(service.getServiceId(), dto);
     }
 
     @Transactional
@@ -80,18 +86,16 @@ public class ConsoleService {
         if (service == null) {
             return;
         }
-        List<InstanceProduceDto> instances = dto.getRegistryInstanceDtoList();
-        if (instances == null || instances.isEmpty()) {
-            deleteService(service);
-            return;
-        }
-
-        for (InstanceProduceDto instanceDto : instances) {
-            serviceInstanceRepository.deleteByServiceIdAndInstanceId(service.getServiceId(), instanceDto.getInstanceId());
-        }
+        serviceInstanceRepository.deleteByServiceIdAndInstanceId(service.getServiceId(), dto.getInstanceId());
         if (serviceInstanceRepository.countByServiceId(service.getServiceId()) == 0) {
-            filterStageRepository.deleteById(service.getServiceId());
+            deleteService(service);
         }
+    }
+
+    @Transactional
+    public void replaceServiceRules(ServiceRuleProduceRequestDto dto) {
+        Services service = getOrCreateService(dto.getServiceName());
+        replaceServiceRules(service.getServiceId(), dto.getRegistryRuleDtoList());
     }
 
     @Transactional
@@ -125,35 +129,36 @@ public class ConsoleService {
 
     @Transactional
     public void saveFilterMetric(FilterMetricProduceDto dto) {
-
         FilterInfo filterInfo = filterInfoRepository.findByFilterName(dto.getFilterName()).orElseThrow(IllegalStateException::new);
         FilterMetric metric = new FilterMetric(filterInfo.getFilterInfoId(), dto.getSuccessCount(), dto.getFailureCount(), dto.getOccurredAt());
         filterMetricRepository.save(metric);
     }
 
     @Transactional
-    public void registerFilterClass(String filterName, PipelineType pipeline, FilterTiming timing, int order, MultipartFile sourceFile) {
-        if (filterInfoRepository.existsByFilterName(filterName)) {
+    public void registerFilter(String filterName, String className, PipelineType pipeline, FilterTiming timing, int order, MultipartFile sourceFile) {
+        String normalizedFilterName = requireFilterName(filterName);
+        String normalizedClassName = requireClassName(className);
+        validateJavaSourceFile(sourceFile, normalizedClassName);
+        if (filterInfoRepository.existsByFilterName(normalizedFilterName)) {
             throw new IllegalArgumentException();
         }
-        String className = filterName;
-        String sourceCode = readSourceCode(sourceFile);
+        byte[] sourceBytes = readFile(sourceFile);
+        String sourceCode = new String(sourceBytes, StandardCharsets.UTF_8);
+        validateSourceDeclaration(sourceCode, normalizedClassName);
+
         FilterStage stage = getOrCreateFilterStage(pipeline, timing);
         if (filterInfoRepository.existsByFilterStageIdAndOrder(stage.getFilterStageId(), order)) {
             throw new IllegalArgumentException();
         }
 
-        FilterInfo filterInfo = filterInfoRepository.save(new FilterInfo(stage.getFilterStageId(), filterName, order));
-        FilterClass filterClass = new FilterClass(filterInfo.getFilterInfoId(), className, sourceCode);
-        filterClassRepository.save(filterClass);
-        sendFilterClass(filterName,className,timing,pipeline,order,sourceFile);
+        FilterInfo filterInfo = filterInfoRepository.save(new FilterInfo(stage.getFilterStageId(), normalizedFilterName, order));
+        filterClassRepository.save(new FilterClass(filterInfo.getFilterInfoId(), normalizedClassName, sourceCode));
+        sendJavaFilter(normalizedFilterName, normalizedClassName, timing, pipeline, order, sourceBytes);
     }
-
     private Services getOrCreateService(String serviceName) {
         return serviceRepository.findByServiceName(serviceName).orElseGet(() -> serviceRepository.save(new Services(serviceName)));
     }
-
-    private void registerServiceInstance(Long serviceId, InstanceProduceDto dto) {
+    private void registerServiceInstance(Long serviceId, ServiceProduceDto dto) {
         if (serviceInstanceRepository.existsByServiceIdAndInstanceId(serviceId, dto.getInstanceId())) {
             return;
         }
@@ -195,32 +200,111 @@ public class ConsoleService {
         return filterStageRepository.findByPipelineAndTiming(pipeline, timing).orElseGet(() -> filterStageRepository.save(new FilterStage(pipeline, timing)));
     }
 
-    private String readSourceCode(MultipartFile sourceFile) {
-        try {
-            return new String(sourceFile.getBytes(), StandardCharsets.UTF_8);
-        } catch (IOException exception) {
-            throw new IllegalStateException();
+    private String requireFilterName(String filterName) {
+        if (filterName == null || filterName.isBlank()) {
+            throw new IllegalArgumentException();
+        }
+
+        String normalized = filterName.trim();
+        if (!FILTER_NAME_PATTERN.matcher(normalized).matches()) {
+            throw new IllegalArgumentException();
+        }
+        return normalized;
+    }
+
+    private String requireClassName(String className) {
+        if (className == null || className.isBlank()) {
+            throw new IllegalArgumentException();
+        }
+
+        String normalized = className.trim();
+        if (!CLASS_NAME_PATTERN.matcher(normalized).matches()) {
+            throw new IllegalArgumentException();
+        }
+        return normalized;
+    }
+
+    private void validateJavaSourceFile(MultipartFile sourceFile, String className) {
+        if (sourceFile == null || sourceFile.isEmpty()) {
+            throw new IllegalArgumentException();
+        }
+        if (sourceFile.getSize() > MAX_JAVA_SOURCE_SIZE) {
+            throw new IllegalArgumentException();
+        }
+
+        String originalFilename = sourceFile.getOriginalFilename();
+        if (originalFilename == null || !originalFilename.toLowerCase().endsWith(".java")) {
+            throw new IllegalArgumentException();
+        }
+
+        String simpleClassName = getSimpleClassName(className);
+        if (!originalFilename.equals(simpleClassName + ".java")) {
+            throw new IllegalArgumentException();
         }
     }
 
-    public void sendFilterClass(String filterName, String className, FilterTiming timing, PipelineType pipeline, int order, MultipartFile classFile) {
-        byte[] classBytes = readFile(classFile);
-        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+    private void validateSourceDeclaration(String sourceCode, String className) {
+        String expectedPackage = getPackageName(className);
+        String expectedSimpleClassName = getSimpleClassName(className);
+
+        Matcher packageMatcher = PACKAGE_PATTERN.matcher(sourceCode);
+        String actualPackage = packageMatcher.find() ? packageMatcher.group(1) : "";
+        if (!expectedPackage.equals(actualPackage)) {
+            throw new IllegalArgumentException();
+        }
+
+        Matcher classMatcher = CLASS_PATTERN.matcher(sourceCode);
+        boolean classFound = false;
+        while (classMatcher.find()) {
+            if (expectedSimpleClassName.equals(classMatcher.group(1))) {
+                classFound = true;
+                break;
+            }
+        }
+        if (!classFound) {
+            throw new IllegalArgumentException();
+        }
+    }
+
+    private String getPackageName(String className) {
+        int separatorIndex = className.lastIndexOf('.');
+        return separatorIndex < 0 ? "" : className.substring(0, separatorIndex);
+    }
+
+    private String getSimpleClassName(String className) {
+        int separatorIndex = className.lastIndexOf('.');
+        return separatorIndex < 0 ? className : className.substring(separatorIndex + 1);
+    }
+
+    private void sendJavaFilter(String filterName, String className, FilterTiming timing, PipelineType pipeline, int order, byte[] sourceBytes) {
+        HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(filterServerUrl))
-                .header("Content-Type", "application/octet-stream")
+                .header("Content-Type", "text/x-java-source; charset=UTF-8")
                 .header("Filter-Name", filterName)
                 .header("Class-Name", className)
                 .header("Filter-Timing", timing.name())
                 .header("Filter-Pipeline", pipeline.name())
-                .header("Filter-Order", String.valueOf(order));
-        HttpRequest request = requestBuilder.POST(HttpRequest.BodyPublishers.ofByteArray(classBytes)).build();
+                .header("Filter-Order", String.valueOf(order))
+                .header("Filter-File-Type", "JAVA")
+                .header("Filter-File-Hash", calculateSha256(sourceBytes))
+                .POST(HttpRequest.BodyPublishers.ofByteArray(sourceBytes))
+                .build();
         sendRequest(request);
+    }
+
+    private String calculateSha256(byte[] bytes) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(bytes));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalArgumentException();
+        }
     }
     private byte[] readFile(MultipartFile sourceFile) {
         try {
             return  sourceFile.getBytes();
         } catch (IOException exception) {
-            throw new IllegalStateException();
+            throw new IllegalArgumentException();
         }
     }
     private void sendRequest(HttpRequest request) {

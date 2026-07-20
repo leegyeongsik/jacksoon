@@ -4,6 +4,7 @@ import io.jacksoon.common.registry.dto.response.EndpointSnapshot;
 import io.jacksoon.router.connection.factory.BackendConnectionFactory;
 import io.jacksoon.router.handler.BackendIOHandler;
 import io.jacksoon.router.pipeline.context.ProxyContext;
+import lombok.Getter;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -22,9 +23,12 @@ public class BackendConnectionPool {
     private Node tail;
     private int size;
     private boolean closed;
-    public BackendConnectionPool( EndpointSnapshot endpoint, BackendConnectionFactory connectionFactory) {
+    @Getter
+    private final String serviceName;
+    public BackendConnectionPool(String serviceName, EndpointSnapshot endpoint, BackendConnectionFactory connectionFactory) {
         this.endpoint = endpoint;
         this.connectionFactory = connectionFactory;
+        this.serviceName = serviceName;
         init();
     }
     private void init() {

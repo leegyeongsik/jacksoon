@@ -5,6 +5,9 @@ import io.jacksoon.common.pipeline.context.HttpRequest;
 import io.jacksoon.filterManagement.pipeline.context.FilterPipelineContext;
 import io.jacksoon.init.annotation.Init;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Map;
 
 @Init
@@ -16,6 +19,7 @@ public class FilterRequestParser {
         if (fileBytes == null || fileBytes.length == 0) {
             throw new IllegalArgumentException("Filter file body is empty");
         }
+        validateFileHash(fileBytes, requireHeader(request, "Filter-File-Hash"));
         FilterConfigDto config = new FilterConfigDto(
                 requireHeader(request, "Filter-Name"),
                 requireHeader(request, "Class-Name"),
@@ -26,9 +30,28 @@ public class FilterRequestParser {
         );
         return new FilterUploadRequest(fileBytes, config);
     }
-
     public String parseFilterName(FilterPipelineContext context) {
         return requireHeader(context.getRequest(), "Filter-Name");
+    }
+
+    private void validateFileHash(byte[] fileBytes, String expectedHash) {
+        if (!expectedHash.matches("(?i)[0-9a-f]{64}")) {
+            throw new IllegalArgumentException("Invalid Filter-File-Hash header");
+        }
+
+        String actualHash = calculateSha256(fileBytes);
+        if (!actualHash.equalsIgnoreCase(expectedHash)) {
+            throw new IllegalArgumentException("Filter file hash mismatch");
+        }
+    }
+
+    private String calculateSha256(byte[] bytes) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(bytes));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 algorithm is unavailable", exception);
+        }
     }
 
     private <E extends Enum<E>> E parseEnum(Class<E> enumType, String value, String headerName) {

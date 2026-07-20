@@ -22,8 +22,12 @@ public class QueueConfig {
     public CommonBlockingQueue<ProduceDto> produceDtoQueue() {
         return new CommonBlockingQueue<>();
     }
-    @Init
+    @Init("serviceMetricQueue")
     public CommonBlockingQueue<ServiceRequest> serviceRequestQueue() {
+        return new CommonBlockingQueue<>();
+    }
+    @Init("filterMetricQueue")
+    public CommonBlockingQueue<ServiceRequest> filterRequestQueue() {
         return new CommonBlockingQueue<>();
     }
 

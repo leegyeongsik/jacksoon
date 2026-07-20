@@ -1,10 +1,9 @@
 package io.jacksoon.common.produce.dto;
 
 public enum ProduceHint {
-    REGISTRY,
-    FILTER_STATUS,
+    SERVICE,
+    FILTER,
     ROUTER_METRIC,
     FILTER_METRIC,
-    ROUTER_FAILURE,
-    FILTER_FAILURE
+    SERVICE_RULE
 }

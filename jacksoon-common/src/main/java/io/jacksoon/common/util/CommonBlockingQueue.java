@@ -13,7 +13,7 @@ public class CommonBlockingQueue<T> {
         queue.offer(context);
     }
     public T poll() throws InterruptedException {
-        return queue.poll(60, TimeUnit.SECONDS);
+        return queue.poll(3, TimeUnit.SECONDS);
 
     }
     public T peek(){

@@ -1,10 +1,13 @@
 package io.jacksoon.router.filter;
 
+import io.jacksoon.common.filter.FilterContext;
 import io.jacksoon.common.filter.FilterRegistryKey;
 import io.jacksoon.common.filter.FilterTiming;
 import io.jacksoon.common.filter.PipelineType;
+import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
+import io.jacksoon.router.produce.dto.ServiceRequest;
 import lombok.Getter;
 
 import java.io.IOException;
@@ -16,7 +19,13 @@ import java.util.Objects;
 @Getter
 @Init
 public class FilterRegistry {
+    private final CommonBlockingQueue<ServiceRequest> filterMetricQueue;
     private volatile LoadedFilterBundle current = new LoadedFilterBundle(0L, null, null, Map.of());
+
+    public FilterRegistry(@Init("filterMetricQueue") CommonBlockingQueue<ServiceRequest> filterMetricQueue) {
+        this.filterMetricQueue = filterMetricQueue;
+    }
+
     public List<RegisteredFilter> get(FilterTiming timing, PipelineType pipeline) {
         LoadedFilterBundle snapshot = current;
         return snapshot.filters().getOrDefault(new FilterRegistryKey(timing, pipeline), List.of()); // 레코드는 equlas()랑 hashcode() 값 자동으로 생성해줘서
@@ -26,9 +35,18 @@ public class FilterRegistry {
     public void execute(FilterTiming timing, PipelineType pipeline, RouterPipelineContext context) {
         LoadedFilterBundle snapshot = current;
         List<RegisteredFilter> filters = snapshot.filters().getOrDefault(new FilterRegistryKey(timing, pipeline), List.of());
+
+        FilterContext filterContext = new RouterFilterContext(context);
         for (RegisteredFilter filter : filters) {
-            if(filter.filter().isSupport(context)){
-                filter.filter().doFilter(context);
+            try {
+                if (!filter.filter().isSupport(filterContext)) {
+                    continue;
+                }
+                filter.filter().doFilter(filterContext);
+                filterMetricQueue.put(new ServiceRequest(filter.config().filterName(), true));
+            } catch (Exception e) {
+                filterMetricQueue.put(new ServiceRequest(filter.config().filterName(), false));
+                e.printStackTrace();
             }
         }
     }

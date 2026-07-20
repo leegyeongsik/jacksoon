@@ -1,12 +1,14 @@
 package io.jacksoon.router.handler;
 
 import io.jacksoon.common.handler.NioConnectionHandler;
+import io.jacksoon.common.produce.dto.ProduceDto;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.util.HttpResponseCheck;
 import io.jacksoon.common.util.ResponseCheckResult;
 import io.jacksoon.router.connection.BackendConnectionPool;
 import io.jacksoon.router.pipeline.context.ProxyContext;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
+import io.jacksoon.router.produce.dto.ServiceRequest;
 import lombok.Setter;
 
 import java.io.IOException;
@@ -19,6 +21,7 @@ public class BackendIOHandler extends NioConnectionHandler {
 
     private final CommonBlockingQueue<ProxyContext> requestQueue;
     private final CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue;
+    private final CommonBlockingQueue<ServiceRequest> serviceRequestQueue;
     private final HttpResponseCheck responseCheck;
     @Setter
     private BackendConnectionPool connectionPool;
@@ -26,13 +29,15 @@ public class BackendIOHandler extends NioConnectionHandler {
     private int pendingCount;
     private long idleSince;
     private volatile boolean closed;
-
-    public BackendIOHandler(Selector selector, SocketChannel socketChannel, CommonBlockingQueue<ProxyContext> requestQueue, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, HttpResponseCheck responseCheck) {
+    private final String serviceName;
+    public BackendIOHandler(String serviceName, Selector selector, SocketChannel socketChannel, CommonBlockingQueue<ProxyContext> requestQueue, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, HttpResponseCheck responseCheck, CommonBlockingQueue<ServiceRequest> serviceRequestQueue) {
         super(selector, socketChannel, SelectionKey.OP_CONNECT);
         this.requestQueue = requestQueue;
         this.routerPipelineQueue = routerPipelineQueue;
         this.responseCheck = responseCheck;
+        this.serviceName = serviceName;
         this.idleSince = System.currentTimeMillis();
+        this.serviceRequestQueue = serviceRequestQueue;
     }
     public void increasePending() {
         pendingCount++;
@@ -178,6 +183,7 @@ public class BackendIOHandler extends NioConnectionHandler {
         responseBuffer.limit(result.responseLength());
         RouterPipelineContext context = new RouterPipelineContext(socketChannel, "backend-response", responseBuffer, result.responseLength(), proxyContext.bufferContext, proxyContext.clientKey);
         routerPipelineQueue.put(context);
+        serviceRequestQueue.put(new ServiceRequest(serviceName,true));
         currentWriteContext = null;
         boolean reusable = !backendClosed && !result.connectionClose() && !result.closeDelimited();
         if (!reusable) {

@@ -21,7 +21,7 @@ import io.jacksoon.registry.worker.RegistryPipelineWorker;
 
 @Init
 public class WorkerPoolConfig {
-    private final String PATH = "localhost:1014/create";
+    private final String PATH = "http://localhost:1014/consumer";
     @Init
     public CommonWorkerPool<RegistryPipelineWorker> registryPipelineWorkerPool(RegistryPipelineTaskExecutor executor, CommonBlockingQueue<RegistryPipelineContext> registryPipelineQueue) {
         return new CommonWorkerPool<>(1, () -> new RegistryPipelineWorker(registryPipelineQueue, executor));

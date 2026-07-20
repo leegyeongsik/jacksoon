@@ -17,6 +17,7 @@ import java.time.Instant;
 )
 @JsonSubTypes({
         @JsonSubTypes.Type(value = ServiceProduceDto.class, name = "SERVICE"),
+        @JsonSubTypes.Type(value = ServiceRuleProduceRequestDto.class, name = "SERVICE_RULE"),
         @JsonSubTypes.Type(value = FilterProduceDto.class, name = "FILTER"),
         @JsonSubTypes.Type(value = ServiceMetricProduceDto.class, name = "ROUTER_METRIC"),
         @JsonSubTypes.Type(value = FilterMetricProduceDto.class, name = "FILTER_METRIC")

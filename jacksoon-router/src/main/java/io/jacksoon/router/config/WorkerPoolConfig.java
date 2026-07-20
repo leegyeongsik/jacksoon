@@ -12,10 +12,10 @@ import io.jacksoon.router.filter.FilterExecutor;
 import io.jacksoon.router.filter.FilterRequestSetting;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
 import io.jacksoon.router.pipeline.executor.RouterPipelineTaskExecutor;
+import io.jacksoon.router.produce.dto.FilterMetricProduceDto;
+import io.jacksoon.router.produce.dto.RouterMetricProduceDto;
 import io.jacksoon.router.produce.dto.ServiceRequest;
 import io.jacksoon.router.worker.*;
-
-import java.nio.file.Path;
 
 @Init
 public class WorkerPoolConfig {
@@ -45,8 +45,12 @@ public class WorkerPoolConfig {
     public CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool(CommonBlockingQueue<ProduceDto> queue, ObjectMapper objectMapper) {
         return new CommonWorkerPool<>(1, () -> new ProduceWorker<>(queue, PATH, objectMapper));
     }
-    @Init
-    public CommonWorkerPool<ProduceMetricWorker> produceMetricPool(CommonBlockingQueue<ServiceRequest> serviceRequestQueue,CommonBlockingQueue<ProduceDto> produceDtoQueue){
-        return new CommonWorkerPool<>(1,()->new ProduceMetricWorker(serviceRequestQueue,produceDtoQueue));
+    @Init("serviceMetricPool")
+    public CommonWorkerPool<ProduceMetricWorker> produceMetricPool(@Init("serviceMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue,CommonBlockingQueue<ProduceDto> produceDtoQueue){
+        return new CommonWorkerPool<>(1,()->new ProduceMetricWorker(serviceRequestQueue,produceDtoQueue, RouterMetricProduceDto.class));
+    }
+    @Init("filterMetricPool")
+    public CommonWorkerPool<ProduceMetricWorker> filterMetricPool(@Init("filterMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue,CommonBlockingQueue<ProduceDto> produceDtoQueue){
+        return new CommonWorkerPool<>(1,()->new ProduceMetricWorker(serviceRequestQueue,produceDtoQueue, FilterMetricProduceDto.class));
     }
 }

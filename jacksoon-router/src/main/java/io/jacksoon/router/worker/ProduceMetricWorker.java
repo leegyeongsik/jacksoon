@@ -2,10 +2,11 @@ package io.jacksoon.router.worker;
 
 import io.jacksoon.common.produce.dto.ProduceDto;
 import io.jacksoon.common.util.CommonBlockingQueue;
-import io.jacksoon.router.produce.dto.RouterMetricProduceDto;
 import io.jacksoon.router.produce.dto.ServiceMetric;
 import io.jacksoon.router.produce.dto.ServiceRequest;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -14,11 +15,16 @@ public class ProduceMetricWorker implements Runnable {
     private final CommonBlockingQueue<ServiceRequest> metricQueue;
     private final CommonBlockingQueue<ProduceDto> produceDtoQueue;
     private final long MAXIMUM_SIZE = 500;
+    private final Constructor<?> constructor;
     long cnt;
-
-    public ProduceMetricWorker(CommonBlockingQueue<ServiceRequest> metricQueue, CommonBlockingQueue<ProduceDto> produceDtoQueue) {
+    public ProduceMetricWorker(CommonBlockingQueue<ServiceRequest> metricQueue, CommonBlockingQueue<ProduceDto> produceDtoQueue,Class<?> clazz) {
         this.metricQueue = metricQueue;
         this.produceDtoQueue = produceDtoQueue;
+        try {
+            this.constructor = clazz.getConstructor(String.class, long.class, long.class);
+        } catch (NoSuchMethodException e) {
+            throw new IllegalArgumentException();
+        }
     }
 
     @Override
@@ -45,8 +51,11 @@ public class ProduceMetricWorker implements Runnable {
         for (String s : serviceMetricMap.keySet()) {
             ServiceMetric serviceMetric = serviceMetricMap.get(s);
             if (serviceMetric.success != 0 || serviceMetric.failure != 0) {
-                RouterMetricProduceDto routerMetricProduceDto = new RouterMetricProduceDto(s, serviceMetric.getSuccess(), serviceMetric.getFailure());
-                produceDtoQueue.put(routerMetricProduceDto);
+                try {
+                    produceDtoQueue.put((ProduceDto) constructor.newInstance(s, serviceMetric.getSuccess(), serviceMetric.getFailure()));
+                } catch (InstantiationException | InvocationTargetException | IllegalAccessException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
         serviceMetricMap.clear();

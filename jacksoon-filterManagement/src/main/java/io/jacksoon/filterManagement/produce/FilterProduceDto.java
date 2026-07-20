@@ -1,16 +1,20 @@
 package io.jacksoon.filterManagement.produce;
 
 import io.jacksoon.common.produce.dto.ProduceDto;
-import lombok.AllArgsConstructor;
+import io.jacksoon.common.produce.dto.ProduceHint;
+import io.jacksoon.common.produce.dto.ProducerType;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
+import java.time.Instant;
 @Getter
-@AllArgsConstructor
 @NoArgsConstructor
-
 public class FilterProduceDto extends ProduceDto {
-    FilterAction filterAction;
-    List<FilterStatusDto> currentFilter;
+    private FilterAction filterAction;
+    private String filterName;
+    public FilterProduceDto(FilterAction filterAction , String filterName){
+        super(ProduceHint.FILTER, ProducerType.FILTER_MANAGEMENT, Instant.now());
+        this.filterAction = filterAction;
+        this.filterName = filterName;
+    }
 }

@@ -46,17 +46,17 @@ public class ConsoleViewController {
     }
 
     @PostMapping("/filter/upload")
-    public String uploadFilterClass(
+    public String uploadFilter(
             @RequestParam("filterName") String filterName,
+            @RequestParam("className") String className,
             @RequestParam("pipeline") PipelineType pipeline,
             @RequestParam("timing") FilterTiming timing,
             @RequestParam("order") int order,
-            @RequestParam("classFile") MultipartFile classFile,
-            RedirectAttributes redirectAttributes
-    ) {
+            @RequestParam("sourceFile") MultipartFile sourceFile,
+            RedirectAttributes redirectAttributes) {
         try {
-            consoleService.registerFilterClass(filterName, pipeline, timing, order, classFile);
-            redirectAttributes.addFlashAttribute("uploadMessage", "필터가 비활성 상태로 등록되었습니다.");
+            consoleService.registerFilter(filterName, className, pipeline, timing, order, sourceFile);
+            redirectAttributes.addFlashAttribute("uploadMessage", "active-filter");
             return "redirect:/filter";
         } catch (IllegalArgumentException | IllegalStateException exception) {
             redirectAttributes.addFlashAttribute("uploadError", exception.getMessage());
