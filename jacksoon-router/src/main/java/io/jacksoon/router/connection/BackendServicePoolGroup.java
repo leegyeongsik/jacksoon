@@ -2,10 +2,11 @@ package io.jacksoon.router.connection;
 
 import io.jacksoon.common.registry.dto.response.EndpointSnapshot;
 import io.jacksoon.router.connection.factory.BackendConnectionFactory;
+import io.jacksoon.router.pipeline.context.ProxyContext;
 
 import java.util.*;
 
-class BackendServicePoolGroup {
+public class BackendServicePoolGroup {
     private final BackendConnectionFactory connectionFactory;
     private final Map<String, BackendConnectionPool> endpointPoolMap = new HashMap<>();
 
@@ -55,19 +56,24 @@ class BackendServicePoolGroup {
         }
     }
 
-    BackendConnectionPool select() {
-        BackendConnectionPool selected = null;
+    public synchronized void send(ProxyContext context) {
+        BackendConnectionPool selected = selectInternal();
 
-        for (BackendConnectionPool pool : endpointPoolMap.values()) { // 어차피 헤드만 보면되니까 거기서 헤드가 제일 널널한애 뽑는게 맞지
+        if (selected == null) {
+            throw new IllegalStateException("No available backend connection pool");
+        }
+        selected.send(context);
+    }
+    private BackendConnectionPool selectInternal() {
+        BackendConnectionPool selected = null;
+        for (BackendConnectionPool pool : endpointPoolMap.values()) {
             if (!pool.available()) {
                 continue;
             }
-
             if (selected == null || pool.load() < selected.load()) {
                 selected = pool;
             }
         }
-
         return selected;
     }
 

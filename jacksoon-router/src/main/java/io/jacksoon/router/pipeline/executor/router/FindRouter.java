@@ -2,8 +2,8 @@ package io.jacksoon.router.pipeline.executor.router;
 
 import io.jacksoon.common.pipeline.context.HttpRequest;
 import io.jacksoon.init.annotation.Init;
-import io.jacksoon.router.connection.BackendConnectionPool;
 import io.jacksoon.router.connection.BackendConnectionPoolManager;
+import io.jacksoon.router.connection.BackendServicePoolGroup;
 import io.jacksoon.router.connection.store.ResolvedRoute;
 import io.jacksoon.router.connection.store.RouterRegistryStore;
 
@@ -26,14 +26,14 @@ public class FindRouter {
             throw new IllegalStateException("No route matched. path=" + path);
         }
 
-        BackendConnectionPool pool = backendConnectionPoolManager.select(route.getServiceName());
+        BackendServicePoolGroup group = backendConnectionPoolManager.select(route.getServiceName());
 
-        if (pool == null) {
+        if (group == null) {
             throw new IllegalStateException(
-                    "No backend pool. serviceName=" + route.getServiceName()
+                    "No backend group. serviceName=" + route.getServiceName()
             );
         }
 
-        return new RoutingTarget(pool, route.getBackendPath());
+        return new RoutingTarget(group, route.getBackendPath());
     }
 }

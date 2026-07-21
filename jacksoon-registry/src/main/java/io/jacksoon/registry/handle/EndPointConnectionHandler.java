@@ -362,7 +362,6 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         connection.setConnected(false);
         close();
         endpointConnectionRegistry.remove(connection.getKey());
-        endpointEventQueue.put(new EndPointEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "fail")
-        );
+        endpointEventQueue.put(new EndPointEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "fail"));
     }
 }

@@ -1,21 +1,16 @@
 package io.jacksoon.router.pipeline.executor.router;
 
-import io.jacksoon.router.connection.BackendConnectionPool;
+import io.jacksoon.router.connection.BackendServicePoolGroup;
+import lombok.Getter;
 
+@Getter
 public class RoutingTarget {
-    private final BackendConnectionPool pool;
+    private final BackendServicePoolGroup backendServicePoolGroup;
     private final String backendPath;
 
-    public RoutingTarget(BackendConnectionPool pool, String backendPath) {
-        this.pool = pool;
+    public RoutingTarget(BackendServicePoolGroup backendServicePoolGroup, String backendPath) {
+        this.backendServicePoolGroup = backendServicePoolGroup;
         this.backendPath = backendPath;
     }
 
-    public BackendConnectionPool getPool() {
-        return pool;
-    }
-
-    public String getBackendPath() {
-        return backendPath;
-    }
 }

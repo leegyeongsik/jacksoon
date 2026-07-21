@@ -66,6 +66,7 @@ public class BackendConnectionPool {
             if (accepted) {
                 return;
             }
+            rollbackRejected(handler);
         }
         throw new IllegalStateException("Failed to send request to backend connection");
     }
@@ -245,5 +246,19 @@ public class BackendConnectionPool {
         private int load() {
             return handler.load();
         }
+    }
+    private void rollbackRejected(BackendIOHandler handler) {
+        Node node = nodeMap.get(handler);
+        if (node == null) {
+            return;
+        }
+        detach(node);
+        handler.decreasePending();
+        if (handler.isAlive()) {
+            insertSorted(node);
+            return;
+        }
+        nodeMap.remove(handler);
+        size--;
     }
 }

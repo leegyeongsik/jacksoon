@@ -173,6 +173,7 @@ public class ConsoleService {
         Set<String> pathPrefixes = new HashSet<>();
         List<ServiceRule> rules = ruleDto.stream().map(rule -> toServiceRule(serviceId, rule, pathPrefixes)).toList();
         serviceRuleRepository.deleteAllByServiceId(serviceId);
+        serviceRuleRepository.flush();
         if (!rules.isEmpty()) {
             serviceRuleRepository.saveAll(rules);
         }

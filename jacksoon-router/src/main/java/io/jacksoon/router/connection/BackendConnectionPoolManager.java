@@ -1,5 +1,6 @@
 package io.jacksoon.router.connection;
 
+import io.jacksoon.common.registry.dto.response.EndpointSnapshot;
 import io.jacksoon.common.registry.dto.response.RegistrySnapshot;
 import io.jacksoon.common.registry.dto.response.ServiceSnapshot;
 import io.jacksoon.init.annotation.Init;
@@ -20,7 +21,6 @@ public class BackendConnectionPoolManager {
         Set<String> liveServices = new HashSet<>();
 
         List<ServiceSnapshot> services = snapshot.getServices();
-
         if (services == null) {
             services = List.of();
         }
@@ -28,11 +28,9 @@ public class BackendConnectionPoolManager {
         for (ServiceSnapshot service : services) {
             String serviceName = service.getServiceName();
             liveServices.add(serviceName);
-
             BackendServicePoolGroup group = servicePoolMap.computeIfAbsent(serviceName, ignored -> new BackendServicePoolGroup(connectionFactory));
             group.sync(serviceName, service.getEndpoints());
         }
-
         removeDeadServices(liveServices);
     }
 
@@ -51,12 +49,12 @@ public class BackendConnectionPoolManager {
         }
     }
 
-    public synchronized BackendConnectionPool select(String serviceName) {
+    public synchronized BackendServicePoolGroup select(String serviceName) {
         BackendServicePoolGroup group = servicePoolMap.get(serviceName);
         if (group == null) {
             return null;
         }
-        return group.select();
+        return group;
     }
 
     public synchronized void maintain() {
