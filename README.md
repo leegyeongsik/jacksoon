@@ -44,6 +44,7 @@ Spring Cloud Gateway과 같은 기존 솔루션을 사용하다가 나도 할 �
 | 모듈                          | 역할                             |
 | --------------------------- | ------------------------------ |
 | `jacksoon-common`           | NIO 네트워크 처리, 파이프라인, 공통 큐와 컨텍스트 |
+| `jacksoon-init` | 커스텀 @Init 애너테이션과 리플렉션을 활용한 객체 생성 및 의존성 주입 |
 | `jacksoon-router`           | 요청 파싱, 라우팅, 인스턴스 선택, 응답 반환    |
 | `jacksoon-registry`         | 서비스 등록, 인스턴스 관리,라우팅 규칙 관리, Health Check         |
 | `jacksoon-filterManagement` | 동적 필터 컴파일, Bundle 생성, 교체 및 삭제         |
