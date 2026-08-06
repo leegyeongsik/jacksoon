@@ -8,6 +8,7 @@ import io.jacksoon.registry.connection.event.EndPointConnectionEvent;
 import io.jacksoon.registry.connection.event.EndPointEvent;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
@@ -119,6 +120,25 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
             return;
         }
         completeHealthCheckSuccess();
+        if(!isConnectionAlive(response)){
+            reconnection();
+        }
+    }
+    private void reconnection() {
+        close();
+        try {
+            this.socketChannel = SocketChannel.open();
+            this.socketChannel.configureBlocking(false);
+            this.socketChannel.connect(new InetSocketAddress(connection.getHost(), connection.getPort()));
+            this.selectionKey = this.socketChannel.register(selector, SelectionKey.OP_CONNECT);
+            this.selectionKey.attach(this);
+        } catch (IOException e) {
+            fail("reconnection fail");
+        }
+    }
+    private boolean isConnectionAlive(String response) {
+        String connectionHeader = findHeader(response, "Connection");
+        return !connectionHeader.equalsIgnoreCase("close");
     }
     private void completeHealthCheckSuccess() {
         setInterestOps(0);
