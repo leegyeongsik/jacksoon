@@ -7,8 +7,8 @@ import java.nio.channels.SocketChannel;
 
 public abstract class NioConnectionHandler implements Handler, AutoCloseable {
     protected final Selector selector;
-    protected final SocketChannel socketChannel;
-    protected final SelectionKey selectionKey;
+    protected SocketChannel socketChannel;
+    protected SelectionKey selectionKey;
 
     protected NioConnectionHandler(Selector selector, SocketChannel socketChannel, int interestOps) {
         this.selector = selector;
