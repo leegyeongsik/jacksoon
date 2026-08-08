@@ -5,7 +5,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.List;
-import java.util.Map;
 
 @Getter
 @Setter
@@ -15,5 +14,4 @@ public class RegistryRegisterRequest {
     private String instanceId;
     private EndpointInfo endpoint;
     private List<RouteRule> rules;
-    private Map<String, String> metadata;
 }

@@ -70,14 +70,8 @@ public class RegistryParse implements RegistryDepth {
         }
     }
 
-    private void parseBody(
-            ByteBuffer buffer,
-            int headerLength,
-            int requestLength,
-            HttpRequest httpRequest
-    ) {
+    private void parseBody(ByteBuffer buffer, int headerLength, int requestLength, HttpRequest httpRequest) {
         int bodyLength = requestLength - headerLength;
-
         if (bodyLength <= 0) {
             httpRequest.setBody(new byte[]{});
             return;

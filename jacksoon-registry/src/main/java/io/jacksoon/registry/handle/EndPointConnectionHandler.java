@@ -25,17 +25,18 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
     private final EndpointConnection connection;
     private final ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry;
     private final CommonBlockingQueue<EndPointEvent> endpointEventQueue;
-    // 여기서 락을 쥐고 들어가야하나  들어가는게 핸들러 생성 스레드 , 헬스체크 워커스레드 , 리액터 스레든데 만약에 락을쥐고 들어가면 워커만 락쥐고있으면 버리고 다음에 요청하는게 맞음
     private final AtomicBoolean healthCheckInProgress = new AtomicBoolean(false);
     private final AtomicBoolean successEventPublished = new AtomicBoolean(false);
     private final AtomicBoolean terminated = new AtomicBoolean(false);
     private volatile long healthCheckStartedAt;
+
     public EndPointConnectionHandler(Selector selector, SocketChannel socketChannel, EndpointConnection connection, ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry, CommonBlockingQueue<EndPointEvent> endpointEventQueue) {
         super(selector, socketChannel, SelectionKey.OP_CONNECT);
         this.connection = connection;
         this.endpointConnectionRegistry = endpointConnectionRegistry;
         this.endpointEventQueue = endpointEventQueue;
     }
+
     @Override
     public void handle() {
         try {
@@ -64,6 +65,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
             fail(e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
+
     private void connect() throws IOException {
         if (!socketChannel.finishConnect()) {
             return;
@@ -91,6 +93,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         connection.clearResponseBuffer();
         setInterestOps(SelectionKey.OP_READ);
     }
+
     private void readHealthCheckResponse() throws IOException {
         ByteBuffer responseBuffer = connection.getResponseBuffer();
         if (responseBuffer == null) {
@@ -120,10 +123,13 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
             return;
         }
         completeHealthCheckSuccess();
-        if(!isConnectionAlive(response)){
+        if (!isConnectionAlive(response)) {
             reconnection();
+        } else {
+            healthCheckInProgress.set(false);
         }
     }
+
     private void reconnection() {
         close();
         try {
@@ -134,20 +140,24 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
             this.selectionKey.attach(this);
         } catch (IOException e) {
             fail("reconnection fail");
+            return;
         }
+        healthCheckInProgress.set(false);
     }
+
     private boolean isConnectionAlive(String response) {
         String connectionHeader = findHeader(response, "Connection");
         return !connectionHeader.equalsIgnoreCase("close");
     }
+
     private void completeHealthCheckSuccess() {
         setInterestOps(0);
         healthCheckStartedAt = 0L;
-        healthCheckInProgress.set(false);
         if (successEventPublished.compareAndSet(false, true)) {
             endpointEventQueue.put(new EndPointEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "success"));
         }
     }
+
     public void fireHealthCheckEvent() {
         if (terminated.get()
                 || !connection.isConnected()
@@ -173,6 +183,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
             fail("failed to prepare health check: " + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
+
     private void checkHealthCheckTimeout() {
         long startedAt = healthCheckStartedAt;
         if (startedAt <= 0L) {
@@ -183,6 +194,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
             fail("health check timeout: elapsed=" + elapsed + "ms");
         }
     }
+
     private boolean isHttpResponseComplete(ByteBuffer responseBuffer) {
         byte[] bytes = responseBuffer.array();
         int totalBytes = responseBuffer.position();
@@ -208,6 +220,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         }
         return true;
     }
+
     private boolean isChunkedBodyComplete(byte[] bytes, int bodyStart, int totalBytes) {
         int cursor = bodyStart;
         while (true) {
@@ -252,6 +265,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
             cursor = chunkDataEnd + 2;
         }
     }
+
     private boolean areChunkTrailersComplete(byte[] bytes, int trailerStart, int totalBytes) {
         int cursor = trailerStart;
         while (true) {
@@ -265,6 +279,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
             cursor = lineEnd + 2;
         }
     }
+
     private int parseContentLength(String headers) {
         String value = findHeader(headers, "Content-Length");
         if ("<none>".equals(value)) {
@@ -291,6 +306,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         }
         return -1;
     }
+
     private int findCrlf(byte[] bytes, int start, int totalBytes) {
         for (int i = start; i <= totalBytes - 2; i++) {
             if (bytes[i] == '\r' && bytes[i + 1] == '\n') {
@@ -299,6 +315,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         }
         return -1;
     }
+
     private boolean containsToken(String headerValue, String token) {
         if (headerValue == null || "<none>".equals(headerValue)) {
             return false;
@@ -352,6 +369,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         }
         return response.substring(0, lineEnd);
     }
+
     private String findHeader(String response, String headerName) {
         if (response == null || response.isBlank()) {
             return "<none>";
