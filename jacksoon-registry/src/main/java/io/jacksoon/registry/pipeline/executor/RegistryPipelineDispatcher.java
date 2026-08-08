@@ -14,8 +14,7 @@ public class RegistryPipelineDispatcher implements PipelineDispatcher<RegistryPi
         if (before == null) {
             return;
         }
-        PipelineExecutor<RegistryPipelineContext> executor =
-                registryPipelineExecutorRegistry.get(before);
+        PipelineExecutor<RegistryPipelineContext> executor = registryPipelineExecutorRegistry.get(before);
         executor.execute(context);
         if (before.equals(context.getEvent())) {
             context.setEvent(executor.nextEvent());
