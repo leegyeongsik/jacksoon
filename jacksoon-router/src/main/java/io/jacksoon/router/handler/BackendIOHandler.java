@@ -21,7 +21,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class BackendIOHandler extends NioConnectionHandler {
-
     private final CommonBlockingQueue<ProxyContext> requestQueue;
     private final CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue;
     private final CommonBlockingQueue<ServiceRequest> serviceRequestQueue;
@@ -35,7 +34,11 @@ public class BackendIOHandler extends NioConnectionHandler {
     private long idleSince;
     private volatile boolean closed;
     private final String serviceName;
-
+    // 여기서는 근데 write read 사이클을 write로 보냈으면 끝날때까지 read 유지로 하긴해야됨 왜냐면 막 write를 보냈을때 어떤게 어떤 리든지 모름
+    // 일단 풀 send write로 바꿈  그리고 버릴떄 대기하고있는애들 보상처리해주고
+    // 그리고 reduce워커랑 핸들러랑 충돌날수있음 리액터는 얘가 일을 하다가 reduce워커가 이 핸들러를 없애는거임 없앨때 close도 할건데 그러면 찐빠나는거임
+    // 그리고 그냥 비동기로 대기하고있는애들 보내버리고 온순서대로 기록한다음에 그거 채우고 반환하면 순서도 지키고 반환도 빨리하고 좀더 효율적이지않을까 이거는 식별이안되서 그니까 일단 다 보내는데 a클 b클 c클 이 큐에있었고 그걸 다 보내서 반환받았다고 해보자 그랬을때 제일먼저온게 peek이 보장되지않음  1.1는 좀 제한될듯 그래서 풀을 이용해서 하나씩 처리하자 그리고 풀로 병렬로 처리하자
+    // 클라이언트한테 반환도 그냥 다 모았다가 read에서 다 모아서 클라이언트 write로 보내지말고 온대로 보내버리는거지 부분부분 그리고 다 왔는지만 체크하고
     public BackendIOHandler(String serviceName, Selector selector, SocketChannel socketChannel, CommonBlockingQueue<ProxyContext> requestQueue, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, HttpResponseCheck responseCheck, CommonBlockingQueue<ServiceRequest> serviceRequestQueue) {
         super(selector, socketChannel, SelectionKey.OP_CONNECT);
         this.requestQueue = requestQueue;
@@ -120,13 +123,18 @@ public class BackendIOHandler extends NioConnectionHandler {
         }
     }
 
-    private void write() throws IOException, InterruptedException { // 어차피 router가 찾아서 거따가 write로 상태 바꾸는건데
-        //currentWriteContext가 안비워졌으면 계속 read로 돌려서 걔부터 빠져 나가게끔
-        if (currentWriteContext == null) {
-            currentWriteContext = requestQueue.poll();
-            if (currentWriteContext == null) {
-                setInterestOps(0);
+    private void write() throws IOException, InterruptedException {
+        synchronized(stateLock){
+            if(closed){
                 return;
+            }
+
+            if (currentWriteContext == null) {
+                currentWriteContext = requestQueue.take();
+                if (currentWriteContext == null) {
+                    setInterestOps(0);
+                    return;
+                }
             }
         }
         socketChannel.write(currentWriteContext.requestBuffer);
@@ -138,6 +146,11 @@ public class BackendIOHandler extends NioConnectionHandler {
     }
 
     private void read() throws IOException, InterruptedException {
+        synchronized (stateLock){
+            if(closed){
+                return;
+            }
+        }
         ProxyContext proxyContext = currentWriteContext;
         if (proxyContext == null) {
             setInterestOps(0);
@@ -177,7 +190,7 @@ public class BackendIOHandler extends NioConnectionHandler {
                 requestQueue.put(context);
                 if (!socketChannel.isConnected()) {
                     setInterestOps(SelectionKey.OP_CONNECT);
-                } else if (currentWriteContext == null) {     // 여기서 null이면 걔가 보내지고 받아질떄까지가 한 사이클임 그래서 null일때 write
+                } else if (currentWriteContext == null) {
                     setInterestOps(SelectionKey.OP_WRITE);
                 }
                 selector.wakeup();
@@ -209,58 +222,45 @@ public class BackendIOHandler extends NioConnectionHandler {
                 }
             }
         }
+        if (!reusable) {
+            failAndClose(new IOException("Backend connection is not reusable"));
+            return;
+        }
         if (connectionPool != null) {
             connectionPool.complete(this);
         } else {
             decreasePending();
         }
-        if (!reusable) {
-            failQueuedAndClose(new IOException("Backend connection is not reusable"));
-        }
-        // 0이 send의 write를 덮어도 그 시점에 put을 한 상태니까 밑에 empty가 아니라 write로 상태가 바뀜 근데 그냥 락거는게 맘편할듯
-        //        currentWriteContext = null;  // 이거 근데 send스레드랑 read스레드가 동시에 들어왔을때 이벤트가 무시될 가능성있음
-        //        if (!requestQueue.isEmpty()) {
-        //            setInterestOps(SelectionKey.OP_WRITE);
-        //        } else {
-        //            setInterestOps(0);
-        //        }
     }
 
     @Override
     public void close() {
-        // 했을때 파이프라인에 넘김 실패요청이라던가
-        // 닫을때 request큐에 쌓여있는거 처리
-        // 종료원인 구분해서 정상적이면 ok 아니면 current 랑 request남아있는거 다른곳으로 보냄
         synchronized (stateLock) {
             if (closed) {
                 return;
             }
-            closed = true;
-            terminated.set(true);
             currentWriteContext = null;
             pendingCount.set(0);
+            terminated.set(true);
+            closed = true;
         }
         closeTransport();
     }
-
     public void closeByPool() {
         synchronized (stateLock) {
             if (closed) {
                 return;
             }
-
-            closed = true;
-            terminated.set(true);
             currentWriteContext = null;
             pendingCount.set(0);
+            terminated.set(true);
+            closed = true;
         }
         super.close();
     }
-
     public int load() {
         return pendingCount.get();
     }
-
     private void failAndClose(Throwable cause) {
         if (!terminated.compareAndSet(false, true)) {
             return;
@@ -271,18 +271,6 @@ public class BackendIOHandler extends NioConnectionHandler {
             failProxyContext(failedContext, cause);
         }
     }
-
-    private void failQueuedAndClose(Throwable cause) {
-        if (!terminated.compareAndSet(false, true)) {
-            return;
-        }
-        List<ProxyContext> failedContexts = detachQueuedContexts();
-        closeTransport();
-        for (ProxyContext failedContext : failedContexts) {
-            failProxyContext(failedContext, cause);
-        }
-    }
-
     private List<ProxyContext> detachAssignedContexts() {
         List<ProxyContext> failedContexts = new ArrayList<>();
         synchronized (stateLock) {
@@ -294,21 +282,8 @@ public class BackendIOHandler extends NioConnectionHandler {
             drainRequestQueue(failedContexts);
             pendingCount.set(0);
         }
-
         return failedContexts;
     }
-
-    private List<ProxyContext> detachQueuedContexts() {
-        List<ProxyContext> failedContexts = new ArrayList<>();
-        synchronized (stateLock) {
-            closed = true;
-            drainRequestQueue(failedContexts);
-            pendingCount.set(0);
-        }
-
-        return failedContexts;
-    }
-
     private void drainRequestQueue(List<ProxyContext> contexts) {
         while (!requestQueue.isEmpty()) {
             try {
@@ -323,7 +298,6 @@ public class BackendIOHandler extends NioConnectionHandler {
             }
         }
     }
-
     private void failProxyContext(ProxyContext context, Throwable cause) {
         if (context == null) {
             return;
@@ -336,15 +310,6 @@ public class BackendIOHandler extends NioConnectionHandler {
             }
         } catch (IOException ignored) {
         }
-
-        System.err.println(
-                "Backend request failed"
-                        + ", service=" + serviceName
-                        + ", cause="
-                        + cause.getClass().getSimpleName()
-                        + ": "
-                        + cause.getMessage()
-        );
     }
 
     private void closeTransport() {

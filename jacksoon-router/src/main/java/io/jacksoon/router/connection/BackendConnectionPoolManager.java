@@ -1,6 +1,5 @@
 package io.jacksoon.router.connection;
 
-import io.jacksoon.common.registry.dto.response.EndpointSnapshot;
 import io.jacksoon.common.registry.dto.response.RegistrySnapshot;
 import io.jacksoon.common.registry.dto.response.ServiceSnapshot;
 import io.jacksoon.init.annotation.Init;
@@ -50,11 +49,7 @@ public class BackendConnectionPoolManager {
     }
 
     public synchronized BackendServicePoolGroup select(String serviceName) {
-        BackendServicePoolGroup group = servicePoolMap.get(serviceName);
-        if (group == null) {
-            return null;
-        }
-        return group;
+        return servicePoolMap.get(serviceName);
     }
 
     public synchronized void maintain() {

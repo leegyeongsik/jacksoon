@@ -29,9 +29,7 @@ public class FindRouter {
         BackendServicePoolGroup group = backendConnectionPoolManager.select(route.getServiceName());
 
         if (group == null) {
-            throw new IllegalStateException(
-                    "No backend group. serviceName=" + route.getServiceName()
-            );
+            throw new IllegalStateException("No backend group. serviceName=" + route.getServiceName());
         }
 
         return new RoutingTarget(group, route.getBackendPath());
