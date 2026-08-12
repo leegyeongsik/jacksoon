@@ -6,6 +6,7 @@ import io.jacksoon.router.handler.BackendIOHandler;
 import io.jacksoon.router.pipeline.context.ProxyContext;
 import lombok.Getter;
 
+import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -95,6 +96,10 @@ public class BackendConnectionPool {
     public synchronized void maintain() {
         if (closed) {
             return;
+        }
+        long now = System.currentTimeMillis();
+        for (BackendIOHandler handler : new ArrayList<>(nodeMap.keySet())) {
+            handler.checkTimeout(now);
         }
         shrinkIfNeeded();
     }

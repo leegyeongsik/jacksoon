@@ -1,14 +1,14 @@
 package io.jacksoon.router.pipeline.context;
 
 import io.jacksoon.common.pipeline.context.PipelineContext;
-import io.jacksoon.common.util.BufferContext;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class RouterPipelineContext extends PipelineContext {
-    public RouterPipelineContext(SocketChannel socketChannel, String event, ByteBuffer byteBuffer, int byteBufferIndex, BufferContext bufferContext, SelectionKey selectionKey) {
-        super(socketChannel, event, byteBuffer, byteBufferIndex, bufferContext, selectionKey);
+    public RouterPipelineContext(SocketChannel socketChannel, String event, ByteBuffer byteBuffer, int byteBufferIndex, SelectionKey selectionKey,AtomicInteger current) {
+        super(socketChannel, event, byteBuffer, byteBufferIndex, selectionKey,current);
     }
 }

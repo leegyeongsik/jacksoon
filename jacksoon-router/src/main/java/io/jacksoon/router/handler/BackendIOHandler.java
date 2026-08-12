@@ -1,6 +1,7 @@
 package io.jacksoon.router.handler;
 
 import io.jacksoon.common.handler.NioConnectionHandler;
+import io.jacksoon.common.util.BufferUtils;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.util.HttpResponseCheck;
 import io.jacksoon.common.util.ResponseCheckResult;
@@ -21,24 +22,24 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class BackendIOHandler extends NioConnectionHandler {
+    private static final long CONNECT_TIMEOUT_MILLIS = 5_000L;
+    private static final long RESPONSE_TIMEOUT_MILLIS = 30_000L;
     private final CommonBlockingQueue<ProxyContext> requestQueue;
     private final CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue;
     private final CommonBlockingQueue<ServiceRequest> serviceRequestQueue;
     private final HttpResponseCheck responseCheck;
     @Setter
     private BackendConnectionPool connectionPool;
-    private ProxyContext currentWriteContext;
+    private volatile ProxyContext currentWriteContext;
     private final Object stateLock = new Object();
     private final AtomicBoolean terminated = new AtomicBoolean(false);
     private final AtomicInteger pendingCount = new AtomicInteger();
-    private long idleSince;
-    private volatile boolean closed;
     private final String serviceName;
-    // 여기서는 근데 write read 사이클을 write로 보냈으면 끝날때까지 read 유지로 하긴해야됨 왜냐면 막 write를 보냈을때 어떤게 어떤 리든지 모름
-    // 일단 풀 send write로 바꿈  그리고 버릴떄 대기하고있는애들 보상처리해주고
-    // 그리고 reduce워커랑 핸들러랑 충돌날수있음 리액터는 얘가 일을 하다가 reduce워커가 이 핸들러를 없애는거임 없앨때 close도 할건데 그러면 찐빠나는거임
-    // 그리고 그냥 비동기로 대기하고있는애들 보내버리고 온순서대로 기록한다음에 그거 채우고 반환하면 순서도 지키고 반환도 빨리하고 좀더 효율적이지않을까 이거는 식별이안되서 그니까 일단 다 보내는데 a클 b클 c클 이 큐에있었고 그걸 다 보내서 반환받았다고 해보자 그랬을때 제일먼저온게 peek이 보장되지않음  1.1는 좀 제한될듯 그래서 풀을 이용해서 하나씩 처리하자 그리고 풀로 병렬로 처리하자
-    // 클라이언트한테 반환도 그냥 다 모았다가 read에서 다 모아서 클라이언트 write로 보내지말고 온대로 보내버리는거지 부분부분 그리고 다 왔는지만 체크하고
+    private volatile long idleSince;
+    private volatile long connectStartedAt;
+    private volatile long requestStartedAt;
+    private volatile boolean closed;
+
     public BackendIOHandler(String serviceName, Selector selector, SocketChannel socketChannel, CommonBlockingQueue<ProxyContext> requestQueue, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, HttpResponseCheck responseCheck, CommonBlockingQueue<ServiceRequest> serviceRequestQueue) {
         super(selector, socketChannel, SelectionKey.OP_CONNECT);
         this.requestQueue = requestQueue;
@@ -46,13 +47,13 @@ public class BackendIOHandler extends NioConnectionHandler {
         this.responseCheck = responseCheck;
         this.serviceName = serviceName;
         this.idleSince = System.currentTimeMillis();
+        this.connectStartedAt = this.idleSince;
         this.serviceRequestQueue = serviceRequestQueue;
     }
 
     public void increasePending() {
         pendingCount.incrementAndGet();
     }
-
     public void decreasePending() {
         int next = pendingCount.updateAndGet(current -> Math.max(0, current - 1));
         if (next == 0) {
@@ -61,11 +62,36 @@ public class BackendIOHandler extends NioConnectionHandler {
     }
 
     public boolean isAlive() {
-        return !closed && selectionKey != null && selectionKey.isValid() && socketChannel != null && socketChannel.isOpen();
+        return !closed
+                && selectionKey != null
+                && selectionKey.isValid()
+                && socketChannel != null
+                && socketChannel.isOpen();
     }
 
     public boolean removable(long now, long idleTimeoutMillis) {
-        return pendingCount.get() == 0 && currentWriteContext == null && requestQueue.isEmpty() && now - idleSince >= idleTimeoutMillis;
+        return pendingCount.get() == 0
+                && currentWriteContext == null
+                && requestQueue.isEmpty()
+                && now - idleSince >= idleTimeoutMillis;
+    }
+
+    public void checkTimeout(long now) {
+        if (closed) {
+            return;
+        }
+
+        if (!socketChannel.isConnected()) {
+            if (now - connectStartedAt >= CONNECT_TIMEOUT_MILLIS) {
+                failAndClose(new IOException("Backend connect timeout"));
+            }
+            return;
+        }
+
+        long startedAt = requestStartedAt;
+        if (startedAt > 0 && currentWriteContext != null && now - startedAt >= RESPONSE_TIMEOUT_MILLIS) {
+            failAndClose(new IOException("Backend response timeout"));
+        }
     }
 
     @Override
@@ -76,9 +102,7 @@ public class BackendIOHandler extends NioConnectionHandler {
             }
 
             if (selectionKey == null || !selectionKey.isValid()) {
-                failAndClose(
-                        new IOException("Backend selection key is invalid")
-                );
+                failAndClose(new IOException("Backend selection key is invalid"));
                 return;
             }
 
@@ -101,11 +125,6 @@ public class BackendIOHandler extends NioConnectionHandler {
             if (selectionKey.isWritable()) {
                 write();
             }
-
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            failAndClose(e);
-
         } catch (IOException | RuntimeException e) {
             failAndClose(e);
         }
@@ -116,6 +135,7 @@ public class BackendIOHandler extends NioConnectionHandler {
             return;
         }
 
+        connectStartedAt = 0L;
         if (currentWriteContext != null || !requestQueue.isEmpty()) {
             setInterestOps(SelectionKey.OP_WRITE);
         } else {
@@ -123,18 +143,18 @@ public class BackendIOHandler extends NioConnectionHandler {
         }
     }
 
-    private void write() throws IOException, InterruptedException {
-        synchronized(stateLock){
-            if(closed){
+    private void write() throws IOException {
+        synchronized (stateLock) {
+            if (closed) {
                 return;
             }
-
             if (currentWriteContext == null) {
-                currentWriteContext = requestQueue.take();
+                currentWriteContext = requestQueue.pollNow();
                 if (currentWriteContext == null) {
                     setInterestOps(0);
                     return;
                 }
+                requestStartedAt = System.currentTimeMillis();
             }
         }
         socketChannel.write(currentWriteContext.requestBuffer);
@@ -145,9 +165,9 @@ public class BackendIOHandler extends NioConnectionHandler {
         setInterestOps(SelectionKey.OP_READ);
     }
 
-    private void read() throws IOException, InterruptedException {
-        synchronized (stateLock){
-            if(closed){
+    private void read() throws IOException {
+        synchronized (stateLock) {
+            if (closed) {
                 return;
             }
         }
@@ -171,6 +191,7 @@ public class BackendIOHandler extends NioConnectionHandler {
             return;
         }
         readBuffer.flip();
+        proxyContext.responseBuffer = BufferUtils.ensureResponseCapacity(proxyContext.responseBuffer, readBuffer.remaining());
         ResponseCheckResult result = responseCheck.check(readBuffer, proxyContext.responseBuffer);
         if (!result.complete()) {
             return;
@@ -208,12 +229,24 @@ public class BackendIOHandler extends NioConnectionHandler {
             throw new IllegalStateException("Invalid response length: " + result.responseLength());
         }
         responseBuffer.limit(result.responseLength());
-        RouterPipelineContext context = new RouterPipelineContext(socketChannel, "backend-response", responseBuffer, result.responseLength(), proxyContext.bufferContext, proxyContext.clientKey);
+        RouterPipelineContext context = new RouterPipelineContext(
+                socketChannel,
+                "backend-response",
+                responseBuffer,
+                result.responseLength(),
+                proxyContext.clientKey,
+                proxyContext.current
+        );
+        context.setCloseAfterWrite(result.connectionClose() || result.closeDelimited());
         routerPipelineQueue.put(context);
         serviceRequestQueue.put(new ServiceRequest(serviceName, true));
-        boolean reusable = !backendClosed && !result.connectionClose() && !result.closeDelimited();
+        boolean reusable = !backendClosed
+                && !result.connectionClose()
+                && !result.closeDelimited();
+
         synchronized (stateLock) {
             currentWriteContext = null;
+            requestStartedAt = 0L;
             if (reusable) {
                 if (requestQueue.isEmpty()) {
                     setInterestOps(0);
@@ -235,28 +268,11 @@ public class BackendIOHandler extends NioConnectionHandler {
 
     @Override
     public void close() {
-        synchronized (stateLock) {
-            if (closed) {
-                return;
-            }
-            currentWriteContext = null;
-            pendingCount.set(0);
-            terminated.set(true);
-            closed = true;
-        }
-        closeTransport();
+        failAndClose(new IOException("Backend connection closed"));
     }
+
     public void closeByPool() {
-        synchronized (stateLock) {
-            if (closed) {
-                return;
-            }
-            currentWriteContext = null;
-            pendingCount.set(0);
-            terminated.set(true);
-            closed = true;
-        }
-        super.close();
+        failAndClose(new IOException("Backend connection closed by pool"));
     }
     public int load() {
         return pendingCount.get();
@@ -275,6 +291,7 @@ public class BackendIOHandler extends NioConnectionHandler {
         List<ProxyContext> failedContexts = new ArrayList<>();
         synchronized (stateLock) {
             closed = true;
+            requestStartedAt = 0L;
             if (currentWriteContext != null) {
                 failedContexts.add(currentWriteContext);
                 currentWriteContext = null;
@@ -285,17 +302,12 @@ public class BackendIOHandler extends NioConnectionHandler {
         return failedContexts;
     }
     private void drainRequestQueue(List<ProxyContext> contexts) {
-        while (!requestQueue.isEmpty()) {
-            try {
-                ProxyContext context = requestQueue.poll();
-                if (context == null) {
-                    return;
-                }
-                contexts.add(context);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+        while (true) {
+            ProxyContext context = requestQueue.pollNow();
+            if (context == null) {
                 return;
             }
+            contexts.add(context);
         }
     }
     private void failProxyContext(ProxyContext context, Throwable cause) {

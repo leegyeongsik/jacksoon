@@ -1,6 +1,8 @@
 package io.jacksoon.filterManagement.pipeline.write;
 
+import io.jacksoon.common.handler.IOStore;
 import io.jacksoon.common.pipeline.context.HttpResponse;
+import io.jacksoon.common.util.ResponseContext;
 import io.jacksoon.filterManagement.pipeline.context.FilterPipelineContext;
 import io.jacksoon.filterManagement.pipeline.depth.FilterDepth;
 import io.jacksoon.init.annotation.Init;
@@ -9,12 +11,18 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Init
 public class FilterWrite implements FilterDepth {
+    private final IOStore ioStore;
+    public FilterWrite(IOStore ioStore) {
+        this.ioStore = ioStore;
+    }
     @Override
     public void dodo(FilterPipelineContext context) {
         HttpResponse response = context.getResponse();
+        validateResponse(response);
         ByteBuffer body = response.getWriteBuffer();
         if (body == null) {
             body = ByteBuffer.wrap(new byte[0]);
@@ -24,23 +32,35 @@ public class FilterWrite implements FilterDepth {
 
         response.addHeader("Content-Length", String.valueOf(body.remaining()));
         response.addHeader("Connection", "close");
-
         byte[] headerBytes = createResponseHeader(response).getBytes(StandardCharsets.UTF_8);
         ByteBuffer output = ByteBuffer.allocate(headerBytes.length + body.remaining());
         output.put(headerBytes);
         output.put(body);
         output.flip();
 
-        context.getBufferContext().setResponseBuffer(output);
         SelectionKey key = context.getSelectionKey();
-        if (key == null || !key.isValid()) {
-            throw new IllegalArgumentException();
+        AtomicInteger current = context.getCurrent();
+        if (key == null || current == null) {
+            return;
         }
-        key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
-        key.selector().wakeup();
+        context.setCloseAfterWrite(true);
+        ioStore.offer(key, new ResponseContext(current.get(), output, true));
         context.setEvent(null);
     }
 
+    private void validateResponse(HttpResponse response) {
+        if (response == null) {
+            throw new IllegalStateException("HttpResponse is null");
+        }
+
+        int statusCode = response.getStatusCode();
+        if (statusCode < 100 || statusCode > 599) {
+            throw new IllegalStateException("Invalid HTTP response status: " + statusCode + " " + response.getReasonPhrase());
+        }
+        if (response.getReasonPhrase() == null) {
+            throw new IllegalStateException("HTTP reason phrase is null. statusCode=" + statusCode);
+        }
+    }
     private String createResponseHeader(HttpResponse response) {
         StringBuilder builder = new StringBuilder();
         builder.append("HTTP/1.1 ")
@@ -55,7 +75,8 @@ public class FilterWrite implements FilterDepth {
                     .append(header.getValue())
                     .append("\r\n");
         }
-        return builder.append("\r\n").toString();
+        builder.append("\r\n");
+        return builder.toString();
     }
 
     @Override

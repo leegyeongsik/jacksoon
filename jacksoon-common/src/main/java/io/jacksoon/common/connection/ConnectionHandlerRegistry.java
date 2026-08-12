@@ -24,15 +24,4 @@ public class ConnectionHandlerRegistry<T extends AutoCloseable> {
         return handlerMap.values();
     }
 
-    public void removeAndClose(String key) {
-        T handler = handlerMap.remove(key);
-        if (handler == null) {
-            return;
-        }
-        try {
-            handler.close();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
 }

@@ -25,10 +25,10 @@ public class HttpRouter implements RouterDepth {
         ByteBuffer backendRequestBuffer = requestRewriter.rewritePath(
                 context.getByteBuffer(),
                 context.getRequest().getMethod(),
-                target.getBackendPath(),
+                target.backendPath(),
                 context.getRequest().getVersion()
         );
-        target.getBackendServicePoolGroup().send(new ProxyContext(backendRequestBuffer, context.getBufferContext(), context.getSelectionKey()));
+        target.backendServicePoolGroup().send(new ProxyContext(backendRequestBuffer, context.getSelectionKey(),context.getCurrent()));
     }
 
     @Override

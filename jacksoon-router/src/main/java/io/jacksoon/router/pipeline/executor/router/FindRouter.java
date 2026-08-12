@@ -26,12 +26,12 @@ public class FindRouter {
             throw new IllegalStateException("No route matched. path=" + path);
         }
 
-        BackendServicePoolGroup group = backendConnectionPoolManager.select(route.getServiceName());
+        BackendServicePoolGroup group = backendConnectionPoolManager.select(route.serviceName());
 
         if (group == null) {
-            throw new IllegalStateException("No backend group. serviceName=" + route.getServiceName());
+            throw new IllegalStateException("No backend group. serviceName=" + route.serviceName());
         }
 
-        return new RoutingTarget(group, route.getBackendPath());
+        return new RoutingTarget(group, route.backendPath());
     }
 }

@@ -3,6 +3,7 @@ package io.jacksoon.filterManagement.config;
 
 import io.jacksoon.common.handler.AcceptHandler;
 import io.jacksoon.common.handler.Handler;
+import io.jacksoon.common.handler.IOStore;
 import io.jacksoon.common.selector.Reactor;
 import io.jacksoon.common.util.HttpRequestCheck;
 import io.jacksoon.filterManagement.handle.FilterRequestSubmitter;
@@ -26,6 +27,11 @@ public class ReactorConfig {
         return ServerSocketChannel.open();
     }
 
+    @Init
+    public IOStore ioStore() {
+        return new IOStore();
+    }
+
     @Init("FilterReactor")
     public Reactor filterReactor(@Init("FilterSelector") Selector selector, @Init("FilterServerSocket") ServerSocketChannel serverSocketChannel, @Init("FilterAcceptHandler") Handler handler) throws Exception {
         Reactor reactor = new Reactor(selector);
@@ -35,7 +41,7 @@ public class ReactorConfig {
     }
 
     @Init("FilterAcceptHandler")
-    public Handler filterAcceptHandler(@Init("FilterSelector") Selector selector, @Init("FilterServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, FilterRequestSubmitter submitter) {
-        return new AcceptHandler(selector, serverSocketChannel, check, submitter);
+    public Handler filterAcceptHandler(@Init("FilterSelector") Selector selector, @Init("FilterServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, FilterRequestSubmitter submitter, IOStore ioStore) {
+        return new AcceptHandler(selector, serverSocketChannel, check, submitter, ioStore);
     }
 }

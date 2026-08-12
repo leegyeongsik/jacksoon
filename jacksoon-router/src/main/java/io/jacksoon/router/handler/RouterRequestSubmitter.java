@@ -1,7 +1,6 @@
 package io.jacksoon.router.handler;
 
 import io.jacksoon.common.handler.RequestSubmitter;
-import io.jacksoon.common.util.BufferContext;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
@@ -9,6 +8,7 @@ import io.jacksoon.router.pipeline.context.RouterPipelineContext;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Init
 public class RouterRequestSubmitter implements RequestSubmitter {
@@ -19,14 +19,14 @@ public class RouterRequestSubmitter implements RequestSubmitter {
     }
 
     @Override
-    public void submit(SocketChannel socketChannel, ByteBuffer requestBuffer, int headerLength, BufferContext bufferContext, SelectionKey selectionKey) {
+    public void submit(SocketChannel socketChannel, ByteBuffer requestBuffer, int headerLength, SelectionKey selectionKey , AtomicInteger current) {
         RouterPipelineContext context = new RouterPipelineContext(
                 socketChannel,
                 "parse",
                 requestBuffer,
                 headerLength,
-                bufferContext,
-                selectionKey
+                selectionKey,
+                current
         );
         routerPipelineQueue.put(context);
     }

@@ -16,6 +16,9 @@ public class CommonBlockingQueue<T> {
         return queue.poll(3, TimeUnit.SECONDS);
 
     }
+    public T pollNow() {
+        return queue.poll();
+    }
     public T peek(){
         return queue.peek();
     }
