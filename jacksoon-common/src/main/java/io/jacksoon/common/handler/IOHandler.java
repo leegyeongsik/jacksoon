@@ -1,10 +1,10 @@
 package io.jacksoon.common.handler;
 
 
-import io.jacksoon.common.util.BufferContext;
 import io.jacksoon.common.util.BufferUtils;
 import io.jacksoon.common.util.RequestCheck;
 import io.jacksoon.common.util.RequestCheckResult;
+import io.jacksoon.common.util.ResponseContext;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -12,23 +12,31 @@ import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class IOHandler implements Handler {
+    private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0).asReadOnlyBuffer();
+
     final SocketChannel socketChannel;
     final SelectionKey selectionKey;
-    final ByteBuffer readBuffer = ByteBuffer.allocate(256);
+    final ByteBuffer readBuffer = ByteBuffer.allocate(8 * 1024);
+    ByteBuffer totalBuffer = ByteBuffer.allocate(8 * 1024);
     final RequestCheck requestCheck;
-    final BufferContext bufferContext;
     final RequestSubmitter requestSubmitter;
+    final IOStore ioStore;
+    private ResponseContext currentWriteResponse;
+    private boolean closed;
+    private final AtomicInteger nextRequestSequence = new AtomicInteger(1);
 
-    IOHandler(Selector selector, SocketChannel socketChannel, RequestCheck requestCheck, BufferContext bufferContext, RequestSubmitter requestSubmitter) throws IOException {
+    IOHandler(Selector selector, SocketChannel socketChannel, RequestCheck requestCheck, RequestSubmitter requestSubmitter, IOStore ioStore) throws IOException {
         this.requestSubmitter = requestSubmitter;
         this.socketChannel = socketChannel;
         this.requestCheck = requestCheck;
-        this.bufferContext = bufferContext;
         this.socketChannel.configureBlocking(false);
         selectionKey = this.socketChannel.register(selector, SelectionKey.OP_READ);
         selectionKey.attach(this);
+        this.ioStore = ioStore;
+        ioStore.initClient(selectionKey);
         selector.wakeup();
     }
 
@@ -49,7 +57,7 @@ public class IOHandler implements Handler {
                 return;
             }
             if (selectionKey.isWritable()) {
-                send();
+                write();
             }
 
         } catch (IOException | CancelledKeyException ex) {
@@ -67,44 +75,92 @@ public class IOHandler implements Handler {
             return true;
         }
         readBuffer.flip();
-        ByteBuffer requestBuffer = bufferContext.getRequestBuffer();
-        requestBuffer = BufferUtils.ensureCapacity(requestBuffer, readBuffer.remaining());
-        bufferContext.setRequestBuffer(requestBuffer);
-        RequestCheckResult result = requestCheck.check(readBuffer, requestBuffer);
+        totalBuffer = BufferUtils.ensureCapacity(totalBuffer, readBuffer.remaining());
+        RequestCheckResult result = requestCheck.check(readBuffer, totalBuffer);
         readBuffer.clear();
-        if (!result.complete()) {
-            return true;
-        }
-        requestBuffer.flip();
-        requestBuffer.limit(result.requestLength());
-        ByteBuffer requestSlice = requestBuffer.slice();
-        selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_READ);
-        requestSubmitter.submit(socketChannel, requestSlice, result.headerLength(), bufferContext, selectionKey);
+
+        processCompletedRequests(result);
         return true;
     }
 
-    private void close() {
-        try {
-            if (selectionKey != null) {
-                selectionKey.cancel();
+    private void processCompletedRequests(RequestCheckResult firstResult) {
+        RequestCheckResult result = firstResult;
+        while (result.complete()) {
+            ByteBuffer ownedRequest = copyRequest(totalBuffer, result.requestLength());
+            removeConsumedBytes(totalBuffer, result.requestLength());
+            int sequence = nextRequestSequence.getAndIncrement();
+            requestSubmitter.submit(
+                    socketChannel,
+                    ownedRequest,
+                    result.headerLength(),
+                    selectionKey,
+                    new AtomicInteger(sequence)
+            );
+            if (totalBuffer.position() == 0) {
+                return;
             }
+            result = requestCheck.check(EMPTY_BUFFER.duplicate(), totalBuffer);
+        }
+    }
+
+    private ByteBuffer copyRequest(ByteBuffer accumulation, int requestLength) {
+        ByteBuffer source = accumulation.duplicate();
+        source.flip();
+        source.limit(requestLength);
+        ByteBuffer owned = ByteBuffer.allocate(requestLength);
+        owned.put(source);
+        owned.flip();
+        return owned;
+    }
+
+    private void removeConsumedBytes(ByteBuffer accumulation, int consumedBytes) {
+        accumulation.flip();
+        accumulation.position(consumedBytes);
+        accumulation.compact();
+    }
+
+    void write() throws IOException {
+        while (selectionKey.isValid()) {
+            if (currentWriteResponse == null) {
+                currentWriteResponse = ioStore.pollReadyOrDisableWrite(selectionKey);
+                if (currentWriteResponse == null) {
+                    return;
+                }
+            }
+
+            ByteBuffer byteBuffer = currentWriteResponse.byteBuffer();
+            while (byteBuffer.hasRemaining()) {
+                int written = socketChannel.write(byteBuffer);
+                if (written == 0) {
+                    return;
+                }
+            }
+            boolean closeAfterWrite = currentWriteResponse.closeAfterWrite();
+            currentWriteResponse = null;
+            ioStore.responseCompleted(selectionKey);
+
+            if (closeAfterWrite) {
+                close();
+                return;
+            }
+        }
+        ioStore.addInterestOps(selectionKey, SelectionKey.OP_READ);
+    }
+
+
+    private void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        ioStore.removeClient(selectionKey);
+        try {
+            selectionKey.cancel();
         } catch (Exception ignored) {
         }
         try {
             socketChannel.close();
         } catch (IOException ignored) {
         }
-    }
-
-    void send() throws IOException {
-        ByteBuffer buffer = bufferContext.getResponseBuffer();
-        socketChannel.write(buffer);
-        if (buffer.hasRemaining()) {
-            selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
-            return;
-        }
-        bufferContext.setResponseBuffer(ByteBuffer.allocate(0));
-        bufferContext.getRequestBuffer().clear();
-        selectionKey.interestOps(SelectionKey.OP_READ);
     }
 }

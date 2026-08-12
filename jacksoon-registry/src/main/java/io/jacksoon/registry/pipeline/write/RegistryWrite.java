@@ -2,7 +2,9 @@ package io.jacksoon.registry.pipeline.write;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jacksoon.common.handler.IOStore;
 import io.jacksoon.common.pipeline.context.HttpResponse;
+import io.jacksoon.common.util.ResponseContext;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.registry.pipeline.context.RegistryPipelineContext;
 import io.jacksoon.registry.pipeline.depth.RegistryDepth;
@@ -11,10 +13,16 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Init
 public class RegistryWrite implements RegistryDepth {
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final IOStore ioStore;
+
+    public RegistryWrite(IOStore ioStore) {
+        this.ioStore = ioStore;
+    }
 
     @Override
     public void dodo(RegistryPipelineContext context) {
@@ -28,7 +36,6 @@ public class RegistryWrite implements RegistryDepth {
         httpResponse.addHeader("Connection", "keep-alive");
 
         String responseHeader = createResponseHeader(httpResponse);
-
         byte[] headerBytes = responseHeader.getBytes(StandardCharsets.UTF_8);
 
         ByteBuffer responseBuffer = ByteBuffer.allocate(headerBytes.length + bodyBytes.length);
@@ -36,11 +43,13 @@ public class RegistryWrite implements RegistryDepth {
         responseBuffer.put(bodyBytes);
         responseBuffer.flip();
 
-        context.getBufferContext().setResponseBuffer(responseBuffer);
-
         SelectionKey selectionKey = context.getSelectionKey();
-        selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
-        selectionKey.selector().wakeup();
+        AtomicInteger current = context.getCurrent();
+        if (selectionKey == null || current == null) {
+            return;
+        }
+
+        ioStore.offer(selectionKey, new ResponseContext(current.get(), responseBuffer, context.isCloseAfterWrite()));
         context.setEvent(null);
     }
 
@@ -61,7 +70,6 @@ public class RegistryWrite implements RegistryDepth {
         }
 
         builder.append("\r\n");
-
         return builder.toString();
     }
 

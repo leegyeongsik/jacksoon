@@ -3,7 +3,6 @@ package io.jacksoon.router.filter;
 import io.jacksoon.common.filter.FilterContext;
 import io.jacksoon.common.pipeline.context.HttpRequest;
 import io.jacksoon.common.pipeline.context.HttpResponse;
-import io.jacksoon.common.util.BufferContext;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
 
 import java.nio.ByteBuffer;
@@ -71,16 +70,6 @@ public final class RouterFilterContext implements FilterContext {
     @Override
     public void setResponse(HttpResponse response) {
         delegate.setResponse(response);
-    }
-
-    @Override
-    public BufferContext getBufferContext() {
-        return delegate.getBufferContext();
-    }
-
-    @Override
-    public void setBufferContext(BufferContext bufferContext) {
-        delegate.setBufferContext(bufferContext);
     }
 
     @Override

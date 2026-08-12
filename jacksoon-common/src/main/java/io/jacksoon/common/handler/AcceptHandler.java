@@ -1,9 +1,6 @@
 package io.jacksoon.common.handler;
 
 
-import io.jacksoon.common.pipeline.context.PipelineContext;
-import io.jacksoon.common.util.BufferContext;
-import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.util.HttpRequestCheck;
 
 import java.io.IOException;
@@ -16,22 +13,25 @@ public class AcceptHandler implements Handler {
     final ServerSocketChannel serverSocketChannel;
     final HttpRequestCheck httpRequestCheck;
     final RequestSubmitter submitter;
+    final IOStore ioStore;
 
-
-    public AcceptHandler(Selector selector, ServerSocketChannel serverSocketChannel, HttpRequestCheck httpRequestCheck, RequestSubmitter submitter) {
+    public AcceptHandler(Selector selector, ServerSocketChannel serverSocketChannel, HttpRequestCheck httpRequestCheck, RequestSubmitter submitter, IOStore ioStore) {
         this.selector = selector;
         this.serverSocketChannel = serverSocketChannel;
         this.httpRequestCheck = httpRequestCheck;
         this.submitter = submitter;
+        this.ioStore = ioStore;
     }
 
     @Override
     public void handle() {
         try {
-            SocketChannel socketChannel = serverSocketChannel.accept();
-
-            if (socketChannel != null) {
-                new IOHandler(selector, socketChannel, httpRequestCheck, new BufferContext(), submitter);
+            while (true) {
+                SocketChannel socketChannel = serverSocketChannel.accept();
+                if (socketChannel == null) {
+                    return;
+                }
+                new IOHandler(selector, socketChannel, httpRequestCheck, submitter,ioStore);
             }
         } catch (IOException ex) {
             ex.printStackTrace();

@@ -22,7 +22,7 @@ public class RouterRegistryStore {
 
     public ResolvedRoute resolve(String path) {
         for (RouteRuleSnapshot rule : routeRules) {
-            if (path.startsWith(rule.getPathPrefix())) {
+            if (matchesPrefix(path, rule.getPathPrefix())) {
                 String backendPath = resolveBackendPath(path, rule);
                 return new ResolvedRoute(rule.getServiceName(), backendPath);
             }
@@ -30,6 +30,18 @@ public class RouterRegistryStore {
         return null;
     }
 
+    private boolean matchesPrefix(String path, String prefix) {
+        if (path == null || prefix == null || prefix.isEmpty()) {
+            return false;
+        }
+        if ("/".equals(prefix)) {
+            return path.startsWith("/");
+        }
+        if (prefix.endsWith("/")) {
+            return path.startsWith(prefix);
+        }
+        return path.equals(prefix) || path.startsWith(prefix + "/");
+    }
     private String resolveBackendPath(String path, RouteRuleSnapshot rule) {
         if (!rule.isStripPrefix()) {
             return path;

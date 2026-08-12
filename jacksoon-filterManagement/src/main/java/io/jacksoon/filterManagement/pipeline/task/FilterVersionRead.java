@@ -21,6 +21,8 @@ public class FilterVersionRead implements FilterDepth {
         ByteBuffer body = ByteBuffer.allocate(Long.BYTES);
         body.putLong(filterStore.version());
         body.flip();
+        context.getResponse().setStatusCode(200);
+        context.getResponse().setReasonPhrase("OK");
         context.getResponse().setWriteBuffer(body);
         context.getResponse().addHeader("Content-Type", "application/octet-stream");
         context.setEvent("write");

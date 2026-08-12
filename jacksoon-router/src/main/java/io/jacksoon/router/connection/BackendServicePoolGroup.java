@@ -4,7 +4,12 @@ import io.jacksoon.common.registry.dto.response.EndpointSnapshot;
 import io.jacksoon.router.connection.factory.BackendConnectionFactory;
 import io.jacksoon.router.pipeline.context.ProxyContext;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class BackendServicePoolGroup {
     private final BackendConnectionFactory connectionFactory;
@@ -14,7 +19,7 @@ public class BackendServicePoolGroup {
         this.connectionFactory = connectionFactory;
     }
 
-    void sync(String serviceName, List<EndpointSnapshot> endpoints) {
+    synchronized void sync(String serviceName, List<EndpointSnapshot> endpoints) {
         Set<String> liveEndpointIds = new HashSet<>();
 
         if (endpoints == null) {
@@ -26,18 +31,15 @@ public class BackendServicePoolGroup {
             liveEndpointIds.add(instanceId);
 
             BackendConnectionPool pool = endpointPoolMap.get(instanceId);
-
             if (pool == null) { // 풀하나가 인스턴스임 풀안에 커넥션풀
-                endpointPoolMap.put(instanceId, new BackendConnectionPool(serviceName,endpoint, connectionFactory));
+                endpointPoolMap.put(instanceId, new BackendConnectionPool(serviceName, endpoint, connectionFactory));
                 continue;
             }
-
             if (!pool.sameEndpoint(endpoint)) {
                 pool.close();
-                endpointPoolMap.put(instanceId, new BackendConnectionPool(serviceName,endpoint, connectionFactory));
+                endpointPoolMap.put(instanceId, new BackendConnectionPool(serviceName, endpoint, connectionFactory));
             }
         }
-
         removeDeadEndpoints(liveEndpointIds);
     }
 
@@ -58,7 +60,6 @@ public class BackendServicePoolGroup {
 
     public synchronized void send(ProxyContext context) {
         BackendConnectionPool selected = selectInternal();
-
         if (selected == null) {
             throw new IllegalStateException("No available backend connection pool");
         }
@@ -77,17 +78,16 @@ public class BackendServicePoolGroup {
         return selected;
     }
 
-    void maintain() {
+    synchronized void maintain() {
         for (BackendConnectionPool pool : endpointPoolMap.values()) {
             pool.maintain();
         }
     }
 
-    void close() {
+    synchronized void close() {
         for (BackendConnectionPool pool : endpointPoolMap.values()) {
             pool.close();
         }
-
         endpointPoolMap.clear();
     }
 }

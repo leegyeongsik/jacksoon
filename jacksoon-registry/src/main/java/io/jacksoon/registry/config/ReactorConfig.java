@@ -2,10 +2,10 @@ package io.jacksoon.registry.config;
 
 import io.jacksoon.common.handler.AcceptHandler;
 import io.jacksoon.common.handler.Handler;
+import io.jacksoon.common.handler.IOStore;
 import io.jacksoon.common.selector.Reactor;
 import io.jacksoon.common.util.HttpRequestCheck;
 import io.jacksoon.init.annotation.Init;
-import io.jacksoon.registry.dto.request.RouteRule;
 import io.jacksoon.registry.handle.RegistryRequestSubmitter;
 
 import java.io.IOException;
@@ -26,6 +26,11 @@ public class ReactorConfig {
         return ServerSocketChannel.open();
     }
 
+    @Init
+    public IOStore ioStore() {
+        return new IOStore();
+    }
+
     @Init("registryReactor")
     public Reactor registryReactor(@Init("registrySelector") Selector selector, @Init("registryServerSocket") ServerSocketChannel serverSocketChannel, @Init("registryAcceptHandler") Handler handler) throws Exception {
         Reactor reactor = new Reactor(selector);
@@ -35,8 +40,8 @@ public class ReactorConfig {
     }
 
     @Init("registryAcceptHandler")
-    public Handler registryAcceptHandler(@Init("registrySelector") Selector selector, @Init("registryServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, RegistryRequestSubmitter submitter) {
-        return new AcceptHandler(selector, serverSocketChannel, check, submitter);
+    public Handler registryAcceptHandler(@Init("registrySelector") Selector selector, @Init("registryServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, RegistryRequestSubmitter submitter, IOStore ioStore) {
+        return new AcceptHandler(selector, serverSocketChannel, check, submitter, ioStore);
     }
 
     @Init("endpointSelector")

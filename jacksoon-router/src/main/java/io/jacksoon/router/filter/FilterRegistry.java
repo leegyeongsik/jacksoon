@@ -29,8 +29,8 @@ public class FilterRegistry {
     public List<RegisteredFilter> get(FilterTiming timing, PipelineType pipeline) {
         LoadedFilterBundle snapshot = current;
         return snapshot.filters().getOrDefault(new FilterRegistryKey(timing, pipeline), List.of()); // 레코드는 equlas()랑 hashcode() 값 자동으로 생성해줘서
-                                                                                                    //오브젝트 안에있는 값이 a , b라고했을때 파라미터로 a , b 를 주면 그 key 벨류를 줌
-                                                                                                    // 그래서 타이밍이랑 파이프라인에 해당하는 필터를 준다
+        //오브젝트 안에있는 값이 a , b라고했을때 파라미터로 a , b 를 주면 그 key 벨류를 줌
+        // 그래서 타이밍이랑 파이프라인에 해당하는 필터를 준다
     }
     public void execute(FilterTiming timing, PipelineType pipeline, RouterPipelineContext context) {
         LoadedFilterBundle snapshot = current;
@@ -50,7 +50,6 @@ public class FilterRegistry {
             }
         }
     }
-
     public synchronized void replace(LoadedFilterBundle candidate) {
         Objects.requireNonNull(candidate);
         LoadedFilterBundle previous = current;
