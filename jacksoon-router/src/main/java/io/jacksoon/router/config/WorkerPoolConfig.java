@@ -12,6 +12,9 @@ import io.jacksoon.router.filter.FilterExecutor;
 import io.jacksoon.router.filter.FilterRequestSetting;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
 import io.jacksoon.router.pipeline.executor.RouterPipelineTaskExecutor;
+import io.jacksoon.router.pipeline.executor.router.FindRouter;
+import io.jacksoon.router.pipeline.executor.router.HttpReRouter;
+import io.jacksoon.router.pipeline.executor.router.ReRoutingContext;
 import io.jacksoon.router.produce.dto.FilterMetricProduceDto;
 import io.jacksoon.router.produce.dto.RouterMetricProduceDto;
 import io.jacksoon.router.produce.dto.ServiceRequest;
@@ -52,5 +55,9 @@ public class WorkerPoolConfig {
     @Init("filterMetricPool")
     public CommonWorkerPool<ProduceMetricWorker> filterMetricPool(@Init("filterMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue,CommonBlockingQueue<ProduceDto> produceDtoQueue){
         return new CommonWorkerPool<>(1,()->new ProduceMetricWorker(serviceRequestQueue,produceDtoQueue, FilterMetricProduceDto.class));
+    }
+    @Init
+    public CommonWorkerPool<ReRoutingWorker> reRoutingPool(CommonBlockingQueue<ReRoutingContext> reRoutingQueue , HttpReRouter httpReRouter){
+        return new CommonWorkerPool<>(1,()->new ReRoutingWorker(reRoutingQueue,httpReRouter));
     }
 }

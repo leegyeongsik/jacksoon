@@ -18,6 +18,7 @@ public class RouterApplication {
     private final CommonWorkerPool<ProduceWorker<ProduceDto>> produceDtoPool;
     private final CommonWorkerPool<ProduceMetricWorker> serviceMetricWorkerPool;
     private final CommonWorkerPool<ProduceMetricWorker> filterMetricWorkerPool;
+    private final CommonWorkerPool<ReRoutingWorker> reRoutingPool;
     public RouterApplication(@Init("backendReactor") Reactor backendReactor,
                              @Init("clientReactor") Reactor clientReactor,
                              CommonWorkerPool<RouterPipelineWorker> routerWorkerPool,
@@ -26,7 +27,8 @@ public class RouterApplication {
                              CommonWorkerPool<FilterWorker> filterWorkerPool,
                              CommonWorkerPool<ProduceWorker<ProduceDto>> produceDtoPool,
                              @Init("serviceMetricPool")CommonWorkerPool<ProduceMetricWorker> serviceMetricWorkerPool,
-                             @Init("filterMetricPool")CommonWorkerPool<ProduceMetricWorker> filterMetricWorkerPool) {
+                             @Init("filterMetricPool")CommonWorkerPool<ProduceMetricWorker> filterMetricWorkerPool,
+                             CommonWorkerPool<ReRoutingWorker> reRoutingPool) {
         this.backendReactor = backendReactor;
         this.clientReactor = clientReactor;
         this.routerWorkerPool = routerWorkerPool;
@@ -36,6 +38,7 @@ public class RouterApplication {
         this.produceDtoPool = produceDtoPool;
         this.serviceMetricWorkerPool = serviceMetricWorkerPool;
         this.filterMetricWorkerPool = filterMetricWorkerPool;
+        this.reRoutingPool = reRoutingPool;
     }
 
     public void start() {
@@ -49,5 +52,6 @@ public class RouterApplication {
         produceDtoPool.start();
         serviceMetricWorkerPool.start();
         filterMetricWorkerPool.start();
+        reRoutingPool.start();
     }
 }
