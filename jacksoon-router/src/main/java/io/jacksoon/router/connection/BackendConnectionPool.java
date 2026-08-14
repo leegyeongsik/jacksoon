@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 
 public class BackendConnectionPool {
+    @Getter
     private final EndpointSnapshot endpoint;
     private final BackendConnectionFactory connectionFactory;
     private final int minConnection = 1;

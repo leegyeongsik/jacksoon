@@ -8,16 +8,20 @@ import io.jacksoon.common.util.ResponseCheckResult;
 import io.jacksoon.router.connection.BackendConnectionPool;
 import io.jacksoon.router.pipeline.context.ProxyContext;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
+import io.jacksoon.router.pipeline.executor.router.ReRoutingContext;
 import io.jacksoon.router.produce.dto.ServiceRequest;
 import lombok.Setter;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -28,6 +32,7 @@ public class BackendIOHandler extends NioConnectionHandler {
     private final CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue;
     private final CommonBlockingQueue<ServiceRequest> serviceRequestQueue;
     private final HttpResponseCheck responseCheck;
+    private final CommonBlockingQueue<ReRoutingContext> reRoutingQueue;
     @Setter
     private BackendConnectionPool connectionPool;
     private volatile ProxyContext currentWriteContext;
@@ -39,16 +44,19 @@ public class BackendIOHandler extends NioConnectionHandler {
     private volatile long connectStartedAt;
     private volatile long requestStartedAt;
     private volatile boolean closed;
+    private volatile boolean isReconnection;
 
-    public BackendIOHandler(String serviceName, Selector selector, SocketChannel socketChannel, CommonBlockingQueue<ProxyContext> requestQueue, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, HttpResponseCheck responseCheck, CommonBlockingQueue<ServiceRequest> serviceRequestQueue) {
+    public BackendIOHandler(String serviceName, Selector selector, SocketChannel socketChannel, CommonBlockingQueue<ProxyContext> requestQueue, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, HttpResponseCheck responseCheck, CommonBlockingQueue<ServiceRequest> serviceRequestQueue, CommonBlockingQueue<ReRoutingContext> reRoutingQueue) {
         super(selector, socketChannel, SelectionKey.OP_CONNECT);
         this.requestQueue = requestQueue;
         this.routerPipelineQueue = routerPipelineQueue;
         this.responseCheck = responseCheck;
         this.serviceName = serviceName;
+        this.reRoutingQueue = reRoutingQueue;
         this.idleSince = System.currentTimeMillis();
         this.connectStartedAt = this.idleSince;
         this.serviceRequestQueue = serviceRequestQueue;
+        this.isReconnection = false;
     }
 
     public void increasePending() {
@@ -134,7 +142,7 @@ public class BackendIOHandler extends NioConnectionHandler {
         if (!socketChannel.finishConnect()) {
             return;
         }
-
+        isReconnection = false;
         connectStartedAt = 0L;
         if (currentWriteContext != null || !requestQueue.isEmpty()) {
             setInterestOps(SelectionKey.OP_WRITE);
@@ -145,6 +153,9 @@ public class BackendIOHandler extends NioConnectionHandler {
 
     private void write() throws IOException {
         synchronized (stateLock) {
+            if (isReconnection) {
+                return;
+            }
             if (closed) {
                 return;
             }
@@ -167,6 +178,9 @@ public class BackendIOHandler extends NioConnectionHandler {
 
     private void read() throws IOException {
         synchronized (stateLock) {
+            if (isReconnection) {
+                return;
+            }
             if (closed) {
                 return;
             }
@@ -208,7 +222,7 @@ public class BackendIOHandler extends NioConnectionHandler {
                 return false;
             }
             try {
-                requestQueue.put(context);
+                requestQueue.put(context); // 상관없어 어차피 OP_WRITE해도 write에서 막힘 , OP_CONNECT은 어차피 커넥션이 중일테니까 상태바꿔도됨
                 if (!socketChannel.isConnected()) {
                     setInterestOps(SelectionKey.OP_CONNECT);
                 } else if (currentWriteContext == null) {
@@ -229,6 +243,10 @@ public class BackendIOHandler extends NioConnectionHandler {
             throw new IllegalStateException("Invalid response length: " + result.responseLength());
         }
         responseBuffer.limit(result.responseLength());
+        ByteBuffer responseView = responseBuffer.asReadOnlyBuffer();
+        byte[] responseBytes = new byte[responseView.remaining()];
+        responseView.get(responseBytes);
+        String response = new String(responseBytes, StandardCharsets.US_ASCII);
         RouterPipelineContext context = new RouterPipelineContext(
                 socketChannel,
                 "backend-response",
@@ -237,33 +255,83 @@ public class BackendIOHandler extends NioConnectionHandler {
                 proxyContext.clientKey,
                 proxyContext.current
         );
-        context.setCloseAfterWrite(result.connectionClose() || result.closeDelimited());
+        context.setCloseAfterWrite(result.closeDelimited());
         routerPipelineQueue.put(context);
         serviceRequestQueue.put(new ServiceRequest(serviceName, true));
         boolean reusable = !backendClosed
                 && !result.connectionClose()
                 && !result.closeDelimited();
-
+        boolean necessaryReconnection = !isConnectionAlive(response);
         synchronized (stateLock) {
             currentWriteContext = null;
             requestStartedAt = 0L;
-            if (reusable) {
+            if (necessaryReconnection) {
+                isReconnection = true;
+                setInterestOps(0);
+            } else if (reusable) {
                 if (requestQueue.isEmpty()) {
                     setInterestOps(0);
                 } else {
                     setInterestOps(SelectionKey.OP_WRITE);
                 }
+            } else {
+                setInterestOps(0);
             }
         }
-        if (!reusable) {
-            failAndClose(new IOException("Backend connection is not reusable"));
-            return;
-        }
+
         if (connectionPool != null) {
             connectionPool.complete(this);
         } else {
             decreasePending();
         }
+        if (necessaryReconnection) {
+            reconnection();
+            return;
+        }
+        if (!reusable) {
+            failAndClose(new IOException("Backend connection is not reusable"));
+        }
+
+    }
+
+
+
+    private void reconnection() {
+        super.close();
+        try {
+            this.socketChannel = SocketChannel.open();
+            this.socketChannel.configureBlocking(false);
+            this.socketChannel.connect(new InetSocketAddress(connectionPool.endpoint().getHost(), connectionPool.endpoint().getPort()));
+            this.selectionKey = this.socketChannel.register(selector, SelectionKey.OP_CONNECT);
+            this.selectionKey.attach(this);
+        } catch (IOException e) {
+            failAndClose(new IOException("Backend reconnection fail"));
+        }
+    }
+    private boolean isConnectionAlive(String response) {
+        String connectionHeader = findHeader(response, "Connection");
+        return !connectionHeader.equalsIgnoreCase("close");
+    }
+
+    private String findHeader(String response, String headerName) {
+        if (response == null || response.isBlank()) {
+            return "<none>";
+        }
+        int headerEnd = response.indexOf("\r\n\r\n");
+        String headerSection = headerEnd == -1 ? response : response.substring(0, headerEnd);
+        String expectedHeader = headerName.toLowerCase(Locale.ROOT) + ":";
+        for (String line : headerSection.split("\r\n")) {
+            String lowerLine = line.toLowerCase(Locale.ROOT);
+            if (!lowerLine.startsWith(expectedHeader)) {
+                continue;
+            }
+            int colonIndex = line.indexOf(':');
+            if (colonIndex == -1) {
+                return "<invalid>";
+            }
+            return line.substring(colonIndex + 1).trim();
+        }
+        return "<none>";
     }
 
     @Override
@@ -281,26 +349,31 @@ public class BackendIOHandler extends NioConnectionHandler {
         if (!terminated.compareAndSet(false, true)) {
             return;
         }
-        List<ProxyContext> failedContexts = detachAssignedContexts();
+        List<ProxyContext> pendingContexts = detachAssignedContexts();
         closeTransport();
-        for (ProxyContext failedContext : failedContexts) {
-            failProxyContext(failedContext, cause);
+        for (ProxyContext pending : pendingContexts) {
+            reRoutingRequest(pending);
         }
     }
+
     private List<ProxyContext> detachAssignedContexts() {
         List<ProxyContext> failedContexts = new ArrayList<>();
+        ProxyContext current;
         synchronized (stateLock) {
             closed = true;
             requestStartedAt = 0L;
-            if (currentWriteContext != null) {
-                failedContexts.add(currentWriteContext);
-                currentWriteContext = null;
-            }
+            current = currentWriteContext;
+            currentWriteContext = null;
+
             drainRequestQueue(failedContexts);
             pendingCount.set(0);
         }
+        if (current != null) {
+            failCurrent(current);
+        }
         return failedContexts;
     }
+
     private void drainRequestQueue(List<ProxyContext> contexts) {
         while (true) {
             ProxyContext context = requestQueue.pollNow();
@@ -310,18 +383,16 @@ public class BackendIOHandler extends NioConnectionHandler {
             contexts.add(context);
         }
     }
-    private void failProxyContext(ProxyContext context, Throwable cause) {
+
+    private void reRoutingRequest(ProxyContext context) {
         if (context == null) {
             return;
         }
+        reRoutingQueue.put(new ReRoutingContext(context, serviceName));
+    }
+
+    private void failCurrent(ProxyContext context) {
         serviceRequestQueue.put(new ServiceRequest(serviceName, false));
-        try {
-            if (context.clientKey != null) {
-                context.clientKey.cancel();
-                context.clientKey.channel().close();
-            }
-        } catch (IOException ignored) {
-        }
     }
 
     private void closeTransport() {

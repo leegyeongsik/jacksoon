@@ -19,19 +19,17 @@ public class FindRouter {
 
     public RoutingTarget find(HttpRequest httpRequest) {
         String path = httpRequest.getPath();
-
         ResolvedRoute route = routerRegistryStore.resolve(path);
-
         if (route == null) {
             throw new IllegalStateException("No route matched. path=" + path);
         }
-
-        BackendServicePoolGroup group = backendConnectionPoolManager.select(route.serviceName());
-
+        return new RoutingTarget(getServiceGroup(route.serviceName()), route.backendPath());
+    }
+    public BackendServicePoolGroup getServiceGroup(String serviceName){
+        BackendServicePoolGroup group = backendConnectionPoolManager.select(serviceName);
         if (group == null) {
-            throw new IllegalStateException("No backend group. serviceName=" + route.serviceName());
+            throw new IllegalStateException("No backend group. serviceName=" + serviceName);
         }
-
-        return new RoutingTarget(group, route.backendPath());
+        return group;
     }
 }

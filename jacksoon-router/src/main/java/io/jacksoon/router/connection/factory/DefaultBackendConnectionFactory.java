@@ -8,6 +8,7 @@ import io.jacksoon.router.connection.BackendConnectionPool;
 import io.jacksoon.router.handler.BackendIOHandler;
 import io.jacksoon.router.pipeline.context.ProxyContext;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
+import io.jacksoon.router.pipeline.executor.router.ReRoutingContext;
 import io.jacksoon.router.produce.dto.ServiceRequest;
 
 import java.io.IOException;
@@ -19,11 +20,13 @@ import java.nio.channels.SocketChannel;
 public class DefaultBackendConnectionFactory implements BackendConnectionFactory {
     private final Selector backendSelector;
     private final CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue;
+    private final CommonBlockingQueue<ReRoutingContext> reRoutingQueue;
     private final HttpResponseCheck responseCheck;
     private final CommonBlockingQueue<ServiceRequest> serviceRequestQueue;
-    public DefaultBackendConnectionFactory(@Init("serviceMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue, @Init("backendSelector") Selector backendSelector, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, HttpResponseCheck responseCheck){
+    public DefaultBackendConnectionFactory(@Init("serviceMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue, @Init("backendSelector") Selector backendSelector, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, CommonBlockingQueue<ReRoutingContext> reRoutingQueue, HttpResponseCheck responseCheck){
         this.backendSelector = backendSelector;
         this.routerPipelineQueue = routerPipelineQueue;
+        this.reRoutingQueue = reRoutingQueue;
         this.responseCheck = responseCheck;
         this.serviceRequestQueue = serviceRequestQueue;
     }
@@ -37,7 +40,7 @@ public class DefaultBackendConnectionFactory implements BackendConnectionFactory
             socketChannel.configureBlocking(false);
             socketChannel.connect(new InetSocketAddress(endpoint.getHost(), endpoint.getPort()));
             CommonBlockingQueue<ProxyContext> requestQueue = new CommonBlockingQueue<>();
-            BackendIOHandler handler = new BackendIOHandler(serviceName,backendSelector, socketChannel, requestQueue, routerPipelineQueue, responseCheck,serviceRequestQueue);
+            BackendIOHandler handler = new BackendIOHandler(serviceName,backendSelector, socketChannel, requestQueue, routerPipelineQueue, responseCheck,serviceRequestQueue,reRoutingQueue);
             handler.setConnectionPool(pool);
             return handler;
         } catch (IOException e) {
