@@ -2,35 +2,40 @@ package io.jacksoon.common.selector;
 
 import io.jacksoon.common.handler.Handler;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.HashMap;
+import java.util.Map;
+
 public class EventManagement {
-    ConcurrentHashMap<Handler, ConcurrentLinkedQueue<Long>> pendingQueue = new ConcurrentHashMap<>();
-    public synchronized boolean pendingEvent(EventWarrap event) {
-        ConcurrentLinkedQueue<Long> queue = pendingQueue.computeIfAbsent(event.getHandler(), h -> new ConcurrentLinkedQueue<>());
-        boolean first = queue.isEmpty();
-        queue.offer(event.getN());
-        return first;
+
+    private final Map<Handler, EventState> states = new HashMap<>();
+    private static class EventState {
+        boolean processing;
+        boolean rerun;
     }
-    // 여기서 순서대로 쌓자 그리고 peek일때 던진게 peek이면 ㄱㄱ
-    // 그리고 하나  끝냈을때 poll다시 큐에 던짐
-    public synchronized Long checkPeekPendingEvent(EventWarrap event){
-        if(!pendingQueue.containsKey(event.getHandler())){
-            throw new IllegalArgumentException();
+    public synchronized boolean pendingEvent(Handler handler) {
+        EventState state = states.computeIfAbsent(handler, h -> new EventState());
+        if (state.processing) {
+            state.rerun = true;
+            return false;
         }
-        return pendingQueue.get(event.getHandler()).peek();
+        state.processing = true;
+        return true;
+    }
+    public synchronized boolean completeEvent(Handler handler) {
+        EventState state = states.get(handler);
+        if (state == null) {
+            return false;
+        }
+        if (state.rerun) {
+            state.rerun = false;
+            return true;
+        }
+
+        states.remove(handler);
+        return false;
     }
 
-    public synchronized Long completeEvent(Handler handler) {
-        ConcurrentLinkedQueue<Long> queue = pendingQueue.get(handler);
-        if (queue == null) {
-            return null;
-        }
-        queue.poll();
-        Long next = queue.peek();
-        if (next == null) {
-            pendingQueue.remove(handler);
-        }
-        return next;
+    public synchronized void remove(Handler handler) {
+        states.remove(handler);
     }
 }

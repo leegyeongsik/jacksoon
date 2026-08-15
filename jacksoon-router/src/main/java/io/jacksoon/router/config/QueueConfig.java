@@ -1,10 +1,9 @@
 package io.jacksoon.router.config;
 
+import io.jacksoon.common.handler.Handler;
 import io.jacksoon.common.produce.dto.ProduceDto;
-import io.jacksoon.common.selector.EventWarrap;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.init.annotation.Init;
-import io.jacksoon.router.pipeline.context.ProxyContext;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
 import io.jacksoon.router.pipeline.executor.router.ReRoutingContext;
 import io.jacksoon.router.produce.dto.ServiceRequest;
@@ -31,8 +30,7 @@ public class QueueConfig {
     public CommonBlockingQueue<ReRoutingContext> reRoutingQueue() {
         return new CommonBlockingQueue<>();
     }
-    @Init CommonBlockingQueue<EventWarrap> eventQueue(){
+    @Init CommonBlockingQueue<Handler> eventQueue(){
         return new CommonBlockingQueue<>();
     }
-
 }

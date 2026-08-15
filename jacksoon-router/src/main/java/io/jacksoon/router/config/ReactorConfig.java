@@ -42,22 +42,18 @@ public class ReactorConfig {
         return new EventManagement();
     }
     @Init("clientReactor")
-    public Reactor clientReactor(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, @Init("acceptHandler") Handler handler, CommonBlockingQueue<EventWarrap> eventQueue,EventManagement eventManagement) throws Exception {
+    public Reactor clientReactor(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, @Init("acceptHandler") Handler handler, CommonBlockingQueue<Handler> eventQueue,EventManagement eventManagement) throws Exception {
         Reactor reactor = new Reactor(selector,eventQueue,eventManagement);
         serverSocketChannel.socket().bind(new InetSocketAddress(1012), 512);
         reactor.register(serverSocketChannel, handler, SelectionKey.OP_ACCEPT);
         return reactor;
     }
-
     @Init("acceptHandler")
     public Handler acceptHandler(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, RequestSubmitter submitter,IOStore ioStore) {
         return new AcceptHandler(selector, serverSocketChannel, check, submitter,ioStore);
     }
-
     @Init("backendReactor")
     public Reactor backendReactor(@Init("backendSelector") Selector selector) throws Exception {
         return new Reactor(selector);
     }
-
-
 }

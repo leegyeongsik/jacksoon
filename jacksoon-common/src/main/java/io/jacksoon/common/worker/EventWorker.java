@@ -1,35 +1,32 @@
 package io.jacksoon.common.worker;
 
+import io.jacksoon.common.handler.Handler;
 import io.jacksoon.common.selector.EventManagement;
-import io.jacksoon.common.selector.EventWarrap;
 import io.jacksoon.common.util.CommonBlockingQueue;
 
-import java.util.Objects;
+public class EventWorker implements Runnable {
 
-public class EventWorker implements Runnable{
-    private final CommonBlockingQueue<EventWarrap> eventWarrapQueue;
+    private final CommonBlockingQueue<Handler> eventQueue;
     private final EventManagement eventManagement;
-    public EventWorker(CommonBlockingQueue<EventWarrap> eventWarrapQueue, EventManagement eventManagement) {
-        this.eventWarrapQueue = eventWarrapQueue;
+
+    public EventWorker(CommonBlockingQueue<Handler> eventQueue, EventManagement eventManagement) {
+        this.eventQueue = eventQueue;
         this.eventManagement = eventManagement;
     }
+
     @Override
     public void run() {
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                EventWarrap event = eventWarrapQueue.take();
-                if (!Objects.equals(eventManagement.checkPeekPendingEvent(event), event.getN())) {
-                    continue;
-                }
+                Handler handler = eventQueue.take();
                 try {
-                    event.getHandler().handle();
+                    handler.handle();
                 } finally {
-                    Long next = eventManagement.completeEvent(event.getHandler());
-                    if (next != null) {
-                        eventWarrapQueue.put(new EventWarrap(event.getHandler(), next));
+                    boolean rerun = eventManagement.completeEvent(handler);
+                    if (rerun) {
+                        eventQueue.put(handler);
                     }
                 }
-
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;

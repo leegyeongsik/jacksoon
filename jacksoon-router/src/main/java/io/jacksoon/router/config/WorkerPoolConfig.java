@@ -1,6 +1,7 @@
 package io.jacksoon.router.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.jacksoon.common.handler.Handler;
 import io.jacksoon.common.produce.dto.ProduceDto;
 import io.jacksoon.common.produce.worker.ProduceWorker;
 import io.jacksoon.common.selector.EventManagement;
@@ -64,7 +65,7 @@ public class WorkerPoolConfig {
         return new CommonWorkerPool<>(1,()->new ReRoutingWorker(reRoutingQueue,httpReRouter));
     }
     @Init
-    public CommonWorkerPool<EventWorker> eventPool(  CommonBlockingQueue<EventWarrap> eventWarrapQueue, EventManagement eventManagement){
-        return new CommonWorkerPool<>(5,()->new EventWorker(eventWarrapQueue,eventManagement));
+    public CommonWorkerPool<EventWorker> eventPool(CommonBlockingQueue<Handler> eventQueue, EventManagement eventManagement){
+        return new CommonWorkerPool<>(5,()->new EventWorker(eventQueue,eventManagement));
     }
 }
