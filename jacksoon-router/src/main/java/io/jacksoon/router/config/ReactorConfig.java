@@ -4,7 +4,10 @@ import io.jacksoon.common.handler.AcceptHandler;
 import io.jacksoon.common.handler.Handler;
 import io.jacksoon.common.handler.IOStore;
 import io.jacksoon.common.handler.RequestSubmitter;
+import io.jacksoon.common.selector.EventManagement;
+import io.jacksoon.common.selector.EventWarrap;
 import io.jacksoon.common.selector.Reactor;
+import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.util.HttpRequestCheck;
 import io.jacksoon.init.annotation.Init;
 
@@ -34,9 +37,13 @@ public class ReactorConfig {
     public IOStore ioStore(){
         return new IOStore();
     }
+    @Init
+    public EventManagement eventManagement(){
+        return new EventManagement();
+    }
     @Init("clientReactor")
-    public Reactor clientReactor(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, @Init("acceptHandler") Handler handler) throws Exception {
-        Reactor reactor = new Reactor(selector);
+    public Reactor clientReactor(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, @Init("acceptHandler") Handler handler, CommonBlockingQueue<EventWarrap> eventQueue,EventManagement eventManagement) throws Exception {
+        Reactor reactor = new Reactor(selector,eventQueue,eventManagement);
         serverSocketChannel.socket().bind(new InetSocketAddress(1012), 512);
         reactor.register(serverSocketChannel, handler, SelectionKey.OP_ACCEPT);
         return reactor;
@@ -51,4 +58,6 @@ public class ReactorConfig {
     public Reactor backendReactor(@Init("backendSelector") Selector selector) throws Exception {
         return new Reactor(selector);
     }
+
+
 }
