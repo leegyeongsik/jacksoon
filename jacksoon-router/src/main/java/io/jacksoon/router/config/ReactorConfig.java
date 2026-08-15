@@ -5,6 +5,7 @@ import io.jacksoon.common.handler.Handler;
 import io.jacksoon.common.handler.IOStore;
 import io.jacksoon.common.handler.RequestSubmitter;
 import io.jacksoon.common.selector.Reactor;
+import io.jacksoon.common.selector.SelectorManager;
 import io.jacksoon.common.util.HttpRequestCheck;
 import io.jacksoon.init.annotation.Init;
 
@@ -41,10 +42,13 @@ public class ReactorConfig {
         reactor.register(serverSocketChannel, handler, SelectionKey.OP_ACCEPT);
         return reactor;
     }
-
+    @Init
+    public SelectorManager selectorManager(){
+        return new SelectorManager();
+    }
     @Init("acceptHandler")
-    public Handler acceptHandler(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, RequestSubmitter submitter,IOStore ioStore) {
-        return new AcceptHandler(selector, serverSocketChannel, check, submitter,ioStore);
+    public Handler acceptHandler( @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, RequestSubmitter submitter,IOStore ioStore,SelectorManager selectorManager) {
+        return new AcceptHandler(serverSocketChannel, check, submitter,ioStore,selectorManager);
     }
 
     @Init("backendReactor")

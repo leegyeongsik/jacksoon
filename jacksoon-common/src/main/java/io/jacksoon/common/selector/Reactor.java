@@ -8,6 +8,8 @@ import java.nio.channels.Selector;
 import java.util.Iterator;
 import java.util.Set;
 import io.jacksoon.common.handler.Handler;
+import lombok.Getter;
+
 public class Reactor implements Runnable{
     final Selector selector;
     public Reactor(Selector selector){

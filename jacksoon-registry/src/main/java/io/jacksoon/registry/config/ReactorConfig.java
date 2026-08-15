@@ -4,6 +4,7 @@ import io.jacksoon.common.handler.AcceptHandler;
 import io.jacksoon.common.handler.Handler;
 import io.jacksoon.common.handler.IOStore;
 import io.jacksoon.common.selector.Reactor;
+import io.jacksoon.common.selector.SelectorManager;
 import io.jacksoon.common.util.HttpRequestCheck;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.registry.handle.RegistryRequestSubmitter;
@@ -38,10 +39,14 @@ public class ReactorConfig {
         reactor.register(serverSocketChannel, handler, SelectionKey.OP_ACCEPT);
         return reactor;
     }
+    @Init
+    public SelectorManager selectorManager(){
+        return new SelectorManager();
+    }
 
     @Init("registryAcceptHandler")
-    public Handler registryAcceptHandler(@Init("registrySelector") Selector selector, @Init("registryServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, RegistryRequestSubmitter submitter, IOStore ioStore) {
-        return new AcceptHandler(selector, serverSocketChannel, check, submitter, ioStore);
+    public Handler registryAcceptHandler(@Init("registryServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, RegistryRequestSubmitter submitter, IOStore ioStore,SelectorManager selectorManager) {
+        return new AcceptHandler(serverSocketChannel, check, submitter, ioStore,selectorManager);
     }
 
     @Init("endpointSelector")

@@ -3,6 +3,7 @@ package io.jacksoon.registry;
 import io.jacksoon.common.produce.dto.ProduceDto;
 import io.jacksoon.common.produce.worker.ProduceWorker;
 import io.jacksoon.common.selector.Reactor;
+import io.jacksoon.common.selector.SelectorManager;
 import io.jacksoon.common.util.CommonWorkerPool;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.registry.worker.EndPointEventWorker;
@@ -19,9 +20,10 @@ public class RegistryApplication {
     private final CommonWorkerPool<EndPointHealthCheckWorker>healthCheckWorker;
     private final CommonWorkerPool<EndPointEventWorker>eventWorker;
     private final CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool;
+    private final SelectorManager selectorManager;
 
-
-    public RegistryApplication(@Init("registryReactor") Reactor registryReactor, @Init("endpointReactor") Reactor endpointReactor, CommonWorkerPool<RegistryPipelineWorker> registryPipelineWorkerPool, CommonWorkerPool<EndpointConnectionWorker> endpointConnectionWorkerPool, CommonWorkerPool<EndPointHealthCheckWorker> healthCheckWorker, CommonWorkerPool<EndPointEventWorker> eventWorker, CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool) {
+    private final int DEFAULT_C_SELECTOR = 1;
+    public RegistryApplication(@Init("registryReactor") Reactor registryReactor, @Init("endpointReactor") Reactor endpointReactor, CommonWorkerPool<RegistryPipelineWorker> registryPipelineWorkerPool, CommonWorkerPool<EndpointConnectionWorker> endpointConnectionWorkerPool, CommonWorkerPool<EndPointHealthCheckWorker> healthCheckWorker, CommonWorkerPool<EndPointEventWorker> eventWorker, CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool, SelectorManager selectorManager) {
         this.registryReactor = registryReactor;
         this.endpointReactor = endpointReactor;
         this.registryPipelineWorkerPool = registryPipelineWorkerPool;
@@ -30,6 +32,7 @@ public class RegistryApplication {
         this.eventWorker = eventWorker;
         this.produceWorkerPool = produceWorkerPool;
 
+        this.selectorManager = selectorManager;
     }
 
     public void start() {
@@ -41,5 +44,8 @@ public class RegistryApplication {
         healthCheckWorker.start();
         eventWorker.start();
         produceWorkerPool.start();
+
+        selectorManager.init(DEFAULT_C_SELECTOR);
+
     }
 }
