@@ -26,6 +26,7 @@ public class QueueConfig {
     public CommonBlockingQueue<ServiceRequest> filterRequestQueue() {
         return new CommonBlockingQueue<>();
     }
+    @Init
     public CommonBlockingQueue<ReRoutingContext> reRoutingQueue() {
         return new CommonBlockingQueue<>();
     }
