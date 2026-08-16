@@ -5,7 +5,6 @@ import io.jacksoon.common.handler.Handler;
 import io.jacksoon.common.handler.IOStore;
 import io.jacksoon.common.handler.RequestSubmitter;
 import io.jacksoon.common.selector.EventManagement;
-import io.jacksoon.common.selector.EventWarrap;
 import io.jacksoon.common.selector.Reactor;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.util.HttpRequestCheck;

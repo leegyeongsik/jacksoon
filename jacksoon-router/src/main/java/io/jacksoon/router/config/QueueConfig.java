@@ -30,7 +30,8 @@ public class QueueConfig {
     public CommonBlockingQueue<ReRoutingContext> reRoutingQueue() {
         return new CommonBlockingQueue<>();
     }
-    @Init CommonBlockingQueue<Handler> eventQueue(){
+    @Init
+    public CommonBlockingQueue<Handler> eventQueue(){
         return new CommonBlockingQueue<>();
     }
 }
