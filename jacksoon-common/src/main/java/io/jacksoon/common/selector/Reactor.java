@@ -8,17 +8,15 @@ import java.nio.channels.Selector;
 import java.util.Iterator;
 import java.util.Set;
 import io.jacksoon.common.handler.Handler;
-import lombok.Getter;
 
 public class Reactor implements Runnable{
     final Selector selector;
     public Reactor(Selector selector){
         this.selector = selector;
     }
-    public void register(SelectableChannel channel, Handler handler ,int ops) throws IOException {
+    public void register(SelectableChannel channel, Handler handler, int ops) throws IOException {
         channel.configureBlocking(false);
-        SelectionKey key = channel.register(selector, ops);
-        key.attach(handler);
+        channel.register(selector, ops, handler);
     }
     @Override
     public void run() {

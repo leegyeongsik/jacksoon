@@ -47,7 +47,7 @@ public class BackendIOHandler extends NioConnectionHandler {
     private volatile boolean isReconnection;
 
     public BackendIOHandler(String serviceName, Selector selector, SocketChannel socketChannel, CommonBlockingQueue<ProxyContext> requestQueue, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, HttpResponseCheck responseCheck, CommonBlockingQueue<ServiceRequest> serviceRequestQueue, CommonBlockingQueue<ReRoutingContext> reRoutingQueue) {
-        super(selector, socketChannel, SelectionKey.OP_CONNECT);
+        super(selector, socketChannel);
         this.requestQueue = requestQueue;
         this.routerPipelineQueue = routerPipelineQueue;
         this.responseCheck = responseCheck;
@@ -57,6 +57,7 @@ public class BackendIOHandler extends NioConnectionHandler {
         this.connectStartedAt = this.idleSince;
         this.serviceRequestQueue = serviceRequestQueue;
         this.isReconnection = false;
+        setInterestOps(SelectionKey.OP_CONNECT);
     }
 
     public void increasePending() {
@@ -301,11 +302,12 @@ public class BackendIOHandler extends NioConnectionHandler {
         try {
             this.socketChannel = SocketChannel.open();
             this.socketChannel.configureBlocking(false);
+            this.connectStartedAt = System.currentTimeMillis();
             this.socketChannel.connect(new InetSocketAddress(connectionPool.endpoint().getHost(), connectionPool.endpoint().getPort()));
-            this.selectionKey = this.socketChannel.register(selector, SelectionKey.OP_CONNECT);
-            this.selectionKey.attach(this);
+            this.selectionKey = this.socketChannel.register(selector, SelectionKey.OP_CONNECT, this);
+            selector.wakeup();
         } catch (IOException e) {
-            failAndClose(new IOException("Backend reconnection fail"));
+            failAndClose(new IOException("Backend reconnection fail", e));
         }
     }
     private boolean isConnectionAlive(String response) {

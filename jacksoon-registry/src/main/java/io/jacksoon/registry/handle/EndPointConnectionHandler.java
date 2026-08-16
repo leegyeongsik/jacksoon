@@ -31,10 +31,11 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
     private volatile long healthCheckStartedAt;
 
     public EndPointConnectionHandler(Selector selector, SocketChannel socketChannel, EndpointConnection connection, ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry, CommonBlockingQueue<EndPointEvent> endpointEventQueue) {
-        super(selector, socketChannel, SelectionKey.OP_CONNECT);
+        super(selector, socketChannel);
         this.connection = connection;
         this.endpointConnectionRegistry = endpointConnectionRegistry;
         this.endpointEventQueue = endpointEventQueue;
+        setInterestOps(SelectionKey.OP_CONNECT);
     }
 
     @Override
