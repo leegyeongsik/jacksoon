@@ -26,10 +26,9 @@ public class Reactor implements Runnable{
         this.eventQueue = eventQueue;
         this.eventManagement =eventManagement;
     }
-    public void register(SelectableChannel channel, Handler handler ,int ops) throws IOException {
+    public void register(SelectableChannel channel, Handler handler, int ops) throws IOException {
         channel.configureBlocking(false);
-        SelectionKey key = channel.register(selector, ops);
-        key.attach(handler);
+        channel.register(selector, ops,handler);
     }
     @Override
     public void run() {
