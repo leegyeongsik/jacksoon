@@ -137,8 +137,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
             this.socketChannel = SocketChannel.open();
             this.socketChannel.configureBlocking(false);
             this.socketChannel.connect(new InetSocketAddress(connection.getHost(), connection.getPort()));
-            this.selectionKey = this.socketChannel.register(selector, SelectionKey.OP_CONNECT);
-            this.selectionKey.attach(this);
+            this.selectionKey = this.socketChannel.register(selector, SelectionKey.OP_CONNECT, this);
         } catch (IOException e) {
             fail("reconnection fail");
             return;
