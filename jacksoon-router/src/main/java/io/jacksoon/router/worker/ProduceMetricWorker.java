@@ -31,7 +31,15 @@ public class ProduceMetricWorker implements Runnable {
     public void run() {
         try {
             while (!Thread.currentThread().isInterrupted()) {
-                metricQueue.poll();
+                ServiceRequest serviceRequest = metricQueue.poll();
+                if (serviceRequest != null) {
+                    Do(serviceRequest);
+                }
+                boolean is = serviceRequest == null;
+                boolean size = cnt >= MAXIMUM_SIZE;
+                if (is || size) {
+                    DODO();
+                }
             }
         } catch (Exception e) {
         } finally {
