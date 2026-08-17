@@ -28,7 +28,7 @@ public class WorkerPoolConfig {
 
     @Init
     public CommonWorkerPool<RouterPipelineWorker> routerPipelineWorkerPool(RouterPipelineTaskExecutor executor, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue) {
-        return new CommonWorkerPool<>(1, () -> new RouterPipelineWorker(routerPipelineQueue, executor));
+        return new CommonWorkerPool<>(4, () -> new RouterPipelineWorker(routerPipelineQueue, executor));
     }
 
     @Init
