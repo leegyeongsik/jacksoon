@@ -16,8 +16,8 @@ public class BackendConnectionPool {
     private final EndpointSnapshot endpoint;
     private final BackendConnectionFactory connectionFactory;
     private final int minConnection = 1;
-    private final int maxConnection = 10;
-    private final int growThreshold = 3;
+    private final int maxConnection = 500;
+    private final int growThreshold = 1;
     private final int shrinkThreshold = 0;
     private final long idleTimeoutMillis = 30_000L;
     private final Map<BackendIOHandler, Node> nodeMap = new IdentityHashMap<>();
