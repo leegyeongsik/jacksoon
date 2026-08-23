@@ -1,7 +1,7 @@
 package io.jacksoon.router.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.common.produce.dto.ProduceDto;
+import io.jacksoon.common.produce.worker.FileStore;
 import io.jacksoon.common.produce.worker.ProduceWorker;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.util.CommonWorkerPool;
@@ -12,7 +12,6 @@ import io.jacksoon.router.filter.FilterExecutor;
 import io.jacksoon.router.filter.FilterRequestSetting;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
 import io.jacksoon.router.pipeline.executor.RouterPipelineTaskExecutor;
-import io.jacksoon.router.pipeline.executor.router.FindRouter;
 import io.jacksoon.router.pipeline.executor.router.HttpReRouter;
 import io.jacksoon.router.pipeline.executor.router.ReRoutingContext;
 import io.jacksoon.router.produce.dto.FilterMetricProduceDto;
@@ -22,8 +21,6 @@ import io.jacksoon.router.worker.*;
 
 @Init
 public class WorkerPoolConfig {
-    private final String PATH = "http://localhost:1014/consumer";
-
     @Init
     public CommonWorkerPool<RouterPipelineWorker> routerPipelineWorkerPool(RouterPipelineTaskExecutor executor, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue) {
         return new CommonWorkerPool<>(4, () -> new RouterPipelineWorker(routerPipelineQueue, executor));
@@ -45,8 +42,8 @@ public class WorkerPoolConfig {
     }
 
     @Init
-    public CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool(CommonBlockingQueue<ProduceDto> queue, ObjectMapper objectMapper) {
-        return new CommonWorkerPool<>(1, () -> new ProduceWorker<>(queue, PATH, objectMapper));
+    public CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool(CommonBlockingQueue<ProduceDto> queue, FileStore fileStore) {
+        return new CommonWorkerPool<>(1, () -> new ProduceWorker<>(queue, fileStore));
     }
     @Init("serviceMetricPool")
     public CommonWorkerPool<ProduceMetricWorker> produceMetricPool(@Init("serviceMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue,CommonBlockingQueue<ProduceDto> produceDtoQueue){
