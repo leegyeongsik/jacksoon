@@ -21,7 +21,6 @@ import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -244,15 +243,14 @@ public class BackendIOHandler extends NioConnectionHandler {
             throw new IllegalStateException("Invalid response length: " + result.responseLength());
         }
         responseBuffer.limit(result.responseLength());
-        ByteBuffer responseView = responseBuffer.asReadOnlyBuffer();
-        byte[] responseBytes = new byte[responseView.remaining()];
-        responseView.get(responseBytes);
-        String response = new String(responseBytes, StandardCharsets.US_ASCII);
+        if (result.connectionClose() && !result.closeDelimited()) {
+            responseBuffer = removeConnectionHeader(responseBuffer);
+        }
         RouterPipelineContext context = new RouterPipelineContext(
                 socketChannel,
                 "backend-response",
                 responseBuffer,
-                result.responseLength(),
+                responseBuffer.remaining(),
                 proxyContext.clientKey,
                 proxyContext.current
         );
@@ -262,7 +260,7 @@ public class BackendIOHandler extends NioConnectionHandler {
         boolean reusable = !backendClosed
                 && !result.connectionClose()
                 && !result.closeDelimited();
-        boolean necessaryReconnection = !isConnectionAlive(response);
+        boolean necessaryReconnection = result.connectionClose();
         synchronized (stateLock) {
             currentWriteContext = null;
             requestStartedAt = 0L;
@@ -292,9 +290,7 @@ public class BackendIOHandler extends NioConnectionHandler {
         if (!reusable) {
             failAndClose(new IOException("Backend connection is not reusable"));
         }
-
     }
-
 
     private void reconnection() {
         super.close();
@@ -308,32 +304,6 @@ public class BackendIOHandler extends NioConnectionHandler {
         } catch (IOException e) {
             failAndClose(new IOException("Backend reconnection fail", e));
         }
-    }
-
-    private boolean isConnectionAlive(String response) {
-        String connectionHeader = findHeader(response, "Connection");
-        return !connectionHeader.equalsIgnoreCase("close");
-    }
-
-    private String findHeader(String response, String headerName) {
-        if (response == null || response.isBlank()) {
-            return "<none>";
-        }
-        int headerEnd = response.indexOf("\r\n\r\n");
-        String headerSection = headerEnd == -1 ? response : response.substring(0, headerEnd);
-        String expectedHeader = headerName.toLowerCase(Locale.ROOT) + ":";
-        for (String line : headerSection.split("\r\n")) {
-            String lowerLine = line.toLowerCase(Locale.ROOT);
-            if (!lowerLine.startsWith(expectedHeader)) {
-                continue;
-            }
-            int colonIndex = line.indexOf(':');
-            if (colonIndex == -1) {
-                return "<invalid>";
-            }
-            return line.substring(colonIndex + 1).trim();
-        }
-        return "<none>";
     }
 
     @Override
@@ -405,5 +375,52 @@ public class BackendIOHandler extends NioConnectionHandler {
                 connectionPool.removeClosed(this);
             }
         }
+    }
+
+    private ByteBuffer removeConnectionHeader(ByteBuffer source) {
+        ByteBuffer view = source.asReadOnlyBuffer();
+        byte[] bytes = new byte[view.remaining()];
+        view.get(bytes);
+        int headerEnd = findHeaderEnd(bytes);
+        if (headerEnd == -1) {
+            return source;
+        }
+        String header = new String(bytes, 0, headerEnd, StandardCharsets.ISO_8859_1);
+        String[] lines = header.split("\r\n");
+        StringBuilder newHeader = new StringBuilder();
+
+        newHeader.append(lines[0]).append("\r\n");
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i];
+            int colon = line.indexOf(':');
+            if (colon <= 0) {
+                newHeader.append(line).append("\r\n");
+                continue;
+            }
+            String name = line.substring(0, colon).trim();
+            if (name.equalsIgnoreCase("Connection") || name.equalsIgnoreCase("Keep-Alive")) {
+                continue;
+            }
+            newHeader.append(line).append("\r\n");
+        }
+        newHeader.append("\r\n");
+        byte[] headerBytes = newHeader.toString().getBytes(StandardCharsets.ISO_8859_1);
+        int bodyStart = headerEnd + 4;
+        int bodyLength = bytes.length - bodyStart;
+        ByteBuffer result = ByteBuffer.allocate(headerBytes.length + bodyLength);
+        result.put(headerBytes);
+        result.put(bytes, bodyStart, bodyLength);
+        result.flip();
+
+        return result;
+    }
+
+    private int findHeaderEnd(byte[] bytes) {
+        for (int i = 0; i <= bytes.length - 4; i++) {
+            if (bytes[i] == '\r' && bytes[i + 1] == '\n' && bytes[i + 2] == '\r' && bytes[i + 3] == '\n') {
+                return i;
+            }
+        }
+        return -1;
     }
 }

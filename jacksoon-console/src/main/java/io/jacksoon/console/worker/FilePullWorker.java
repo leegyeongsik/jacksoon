@@ -41,9 +41,7 @@ public class FilePullWorker implements Runnable {
     }
 
     private void registerRoot() throws IOException {
-        if (!Files.isDirectory(metricRoot)) {
-            throw new IllegalStateException("metric directory does not exist: " + metricRoot);
-        }
+        Files.createDirectories(metricRoot);
         WatchKey key = metricRoot.register(watchService, StandardWatchEventKinds.ENTRY_CREATE);
         watchPaths.put(key, metricRoot);
     }

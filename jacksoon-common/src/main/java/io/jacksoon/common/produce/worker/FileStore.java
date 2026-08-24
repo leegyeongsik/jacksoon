@@ -13,7 +13,7 @@ import java.util.List;
 
 public class FileStore implements ProduceStore<ProduceDto>{
     private final ObjectMapper objectMapper;
-    private final Path metricRoot = Path.of("metric");
+    Path metricRoot = Path.of(System.getProperty("jacksoon.metric.root", "D:/jacksoon/metric"));
     private final Object stateLock = new Object();
 
     public FileStore(ObjectMapper objectMapper) {

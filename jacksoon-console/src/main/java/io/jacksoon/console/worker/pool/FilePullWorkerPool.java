@@ -11,7 +11,7 @@ import java.nio.file.Path;
 import java.util.concurrent.ExecutorService;
 @Component
 public class FilePullWorkerPool {
-    private final Path metricRoot = Path.of("metric");
+    Path metricRoot = Path.of(System.getProperty("jacksoon.metric.root", "D:/jacksoon/metric"));
     private final MetricFileOffsetRepository metricFileOffsetRepository;
     private final ObjectMapper objectMapper;
     private final ProduceQueue produceQueue;

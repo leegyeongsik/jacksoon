@@ -43,11 +43,11 @@ public class WorkerPoolConfig {
 
     @Init
     public CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool(CommonBlockingQueue<ProduceDto> queue, FileStore fileStore) {
-        return new CommonWorkerPool<>(1, () -> new ProduceWorker<>(queue, fileStore));
+        return new CommonWorkerPool<>(5, () -> new ProduceWorker<>(queue, fileStore));
     }
     @Init("serviceMetricPool")
     public CommonWorkerPool<ProduceMetricWorker> produceMetricPool(@Init("serviceMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue,CommonBlockingQueue<ProduceDto> produceDtoQueue){
-        return new CommonWorkerPool<>(1,()->new ProduceMetricWorker(serviceRequestQueue,produceDtoQueue, RouterMetricProduceDto.class));
+        return new CommonWorkerPool<>(5,()->new ProduceMetricWorker(serviceRequestQueue,produceDtoQueue, RouterMetricProduceDto.class));
     }
     @Init("filterMetricPool")
     public CommonWorkerPool<ProduceMetricWorker> filterMetricPool(@Init("filterMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue,CommonBlockingQueue<ProduceDto> produceDtoQueue){
