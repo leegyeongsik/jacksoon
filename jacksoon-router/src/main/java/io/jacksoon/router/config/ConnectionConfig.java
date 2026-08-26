@@ -3,11 +3,10 @@ package io.jacksoon.router.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import io.jacksoon.common.connection.ConnectionHandlerRegistry;
+import io.jacksoon.common.produce.worker.FileStore;
 import io.jacksoon.common.util.HttpRequestCheck;
 import io.jacksoon.common.util.HttpResponseCheck;
 import io.jacksoon.init.annotation.Init;
-import io.jacksoon.router.handler.BackendIOHandler;
 
 @Init
 public class ConnectionConfig {
@@ -28,4 +27,8 @@ public class ConnectionConfig {
         return objectMapper;
     }
 
+    @Init
+    public FileStore fileStore(){
+        return new FileStore(objectMapper());
+    }
 }
