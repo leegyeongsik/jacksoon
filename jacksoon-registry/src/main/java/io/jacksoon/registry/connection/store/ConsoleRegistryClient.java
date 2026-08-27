@@ -1,8 +1,7 @@
-package io.jacksoon.router.connection.store;
+package io.jacksoon.registry.connection.store;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.common.registry.dto.response.RegistrySnapshot;
-import io.jacksoon.common.registry.dto.response.RegistryVersionResponse;
 import io.jacksoon.init.annotation.Init;
 
 import java.net.URI;
@@ -11,27 +10,19 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
 @Init
-public class RegistryClient {
+public class ConsoleRegistryClient {
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper;
+    private final String snapshotUrl = "http://localhost:1014/registry/snapshot";
 
-    private final String versionUrl = "http://localhost:1013/version";
-    private final String snapshotUrl = "http://localhost:1013/snapshot";
-
-    public RegistryClient(ObjectMapper objectMapper) {
+    public ConsoleRegistryClient(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
-    public long version() {
-        RegistryVersionResponse response = get(versionUrl, RegistryVersionResponse.class);
-        return response.getVersion();
-    }
+
     public RegistrySnapshot snapshot() {
-        return get(snapshotUrl, RegistrySnapshot.class);
-    }
-    private <T> T get(String url, Class<T> responseType) {
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
+                    .uri(URI.create(snapshotUrl))
                     .GET()
                     .build();
 
@@ -42,16 +33,16 @@ public class RegistryClient {
 
             if (response.statusCode() != 200) {
                 throw new IllegalStateException(
-                        "Registry request failed. url=" + url + ", status=" + response.statusCode()
+                        "Console registry snapshot request failed. status=" + response.statusCode()
                 );
             }
 
-            return objectMapper.readValue(response.body(), responseType);
+            return objectMapper.readValue(response.body(), RegistrySnapshot.class);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while requesting registry", e);
+            throw new IllegalStateException("Interrupted while fetching console registry snapshot", e);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to request registry. url=" + url, e);
+            throw new IllegalStateException("Failed to fetch console registry snapshot", e);
         }
     }
 }

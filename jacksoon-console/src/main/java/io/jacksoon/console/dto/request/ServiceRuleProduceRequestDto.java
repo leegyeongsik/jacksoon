@@ -13,4 +13,5 @@ public class ServiceRuleProduceRequestDto extends BaseProduceDto {
     private String serviceName;
     private RegistryAction action;
     private List<ServiceRuleProduceDto> registryRuleDtoList;
+    private long registryVersion;
 }

@@ -43,6 +43,14 @@ public class FilterStore {// 여기서 컴파일 저장해놓고
         return state.currentBundle();
     }
 
+    public synchronized void initialize(Map<String, FilterDefinition> activeFilters, long version, Path bundlePath) {
+        if (state.bundleVersion() != 0L) {
+            throw new IllegalStateException();
+        }
+        validateState(activeFilters, version, bundlePath);
+        state = new State(version, bundlePath, Map.copyOf(activeFilters));
+    }
+
     public void commit(Map<String, FilterDefinition> candidateFilters, long nextVersion, Path bundlePath) {
         if (!operationLock.isHeldByCurrentThread()) {
             throw new IllegalArgumentException();
@@ -50,14 +58,41 @@ public class FilterStore {// 여기서 컴파일 저장해놓고
         if (nextVersion != state.bundleVersion() + 1) {
             throw new IllegalArgumentException();
         }
-        if (candidateFilters == null) {
+        validateState(candidateFilters, nextVersion, bundlePath);
+        state = new State(nextVersion, bundlePath, Map.copyOf(candidateFilters));
+    }
+
+    private void validateState(Map<String, FilterDefinition> filters, long version, Path bundlePath) {
+        if (version < 1L) {
+            throw new IllegalArgumentException();
+        }
+        if (filters == null) {
             throw new IllegalArgumentException();
         }
         if (bundlePath == null || !Files.isRegularFile(bundlePath)) {
             throw new IllegalArgumentException();
         }
 
-        state = new State(nextVersion, bundlePath, Map.copyOf(candidateFilters));
+        for (Map.Entry<String, FilterDefinition> entry : filters.entrySet()) {
+            String filterName = entry.getKey();
+            FilterDefinition definition = entry.getValue();
+
+            if (filterName == null || filterName.isBlank()) {
+                throw new IllegalArgumentException();
+            }
+            if (definition == null || definition.config() == null) {
+                throw new IllegalArgumentException();
+            }
+            if (!filterName.equals(definition.config().filterName())) {
+                throw new IllegalArgumentException();
+            }
+            if (definition.artifactVersion() < 1L || definition.artifactVersion() > version) {
+                throw new IllegalArgumentException();
+            }
+            if (definition.jarPath() == null || !Files.isRegularFile(definition.jarPath())) {
+                throw new IllegalArgumentException();
+            }
+        }
     }
 
     private record State(

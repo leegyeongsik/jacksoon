@@ -1,15 +1,18 @@
-package io.jacksoon.registry.dto.response;
+package io.jacksoon.console.dto.response;
 
 import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
+@Setter
+@NoArgsConstructor
 public class EndpointSnapshot {
-    private final String instanceId;
-    private final String host;
-    private final int port;
-    private final String protocol;
-    private final String healthPath;
-
+    String instanceId;
+    String host;
+    int port;
+    String protocol;
+    String healthPath;
     public EndpointSnapshot(String instanceId, String host, int port, String protocol, String healthPath) {
         this.instanceId = instanceId;
         this.host = host;

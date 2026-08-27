@@ -14,15 +14,19 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 public class RegistryProduceRule extends ProduceDto {
-    String serviceName;
-    RegistryAction action;
-    List<RegistryRuleProduceDto> registryRuleDtoList;
+    private String serviceName;
+    private RegistryAction action;
+    private List<RegistryRuleProduceDto> registryRuleDtoList;
+    private long registryVersion;
 
-    public RegistryProduceRule(String serviceName, RegistryAction registryAction, List<RegistryRuleProduceDto> registryRuleDtoList) {
-        super(ProduceHint.SERVICE_RULE,ProducerType.REGISTRY,Instant.now());
+    public RegistryProduceRule(String serviceName,
+                               RegistryAction registryAction,
+                               List<RegistryRuleProduceDto> registryRuleDtoList,
+                               long registryVersion) {
+        super(ProduceHint.SERVICE_RULE, ProducerType.REGISTRY, Instant.now());
         this.serviceName = serviceName;
         this.action = registryAction;
         this.registryRuleDtoList = registryRuleDtoList;
-
+        this.registryVersion = registryVersion;
     }
 }

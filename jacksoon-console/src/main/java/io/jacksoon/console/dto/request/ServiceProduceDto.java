@@ -16,4 +16,5 @@ public class ServiceProduceDto extends BaseProduceDto {
     private String protocol;
     private String healthPath;
     private String reason;
+    private long registryVersion;
 }

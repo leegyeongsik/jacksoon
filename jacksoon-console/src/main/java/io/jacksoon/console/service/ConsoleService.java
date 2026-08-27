@@ -1,30 +1,24 @@
 package io.jacksoon.console.service;
 
 import io.jacksoon.console.dto.request.*;
-import io.jacksoon.console.dto.response.FilterResponseDto;
-import io.jacksoon.console.dto.response.ServiceResponseDto;
+import io.jacksoon.console.dto.response.*;
 import io.jacksoon.console.entity.filter.FilterClass;
 import io.jacksoon.console.entity.filter.FilterInfo;
 import io.jacksoon.console.entity.filter.FilterMetric;
 import io.jacksoon.console.entity.filter.FilterStage;
-import io.jacksoon.console.entity.service.ServiceInstance;
-import io.jacksoon.console.entity.service.ServiceMetric;
-import io.jacksoon.console.entity.service.ServiceRule;
-import io.jacksoon.console.entity.service.Services;
+import io.jacksoon.console.entity.service.*;
 import io.jacksoon.console.repository.ConsoleRepository;
 import io.jacksoon.console.repository.filter.FilterClassRepository;
 import io.jacksoon.console.repository.filter.FilterInfoRepository;
 import io.jacksoon.console.repository.filter.FilterMetricRepository;
 import io.jacksoon.console.repository.filter.FilterStageRepository;
-import io.jacksoon.console.repository.service.ServiceInstanceRepository;
-import io.jacksoon.console.repository.service.ServiceMetricRepository;
-import io.jacksoon.console.repository.service.ServiceRepository;
-import io.jacksoon.console.repository.service.ServiceRuleRepository;
+import io.jacksoon.console.repository.service.*;
 import io.jacksoon.console.type.FilterTiming;
 import io.jacksoon.console.type.PipelineType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -58,12 +52,28 @@ public class ConsoleService {
     private final FilterMetricRepository filterMetricRepository;
     private final FilterStageRepository filterStageRepository;
 
+    private final RegistryVersionRepository registryVersionRepository;
     private final ServiceInstanceRepository serviceInstanceRepository;
     private final ServiceMetricRepository serviceMetricRepository;
     private final ServiceRepository serviceRepository;
     private final ServiceRuleRepository serviceRuleRepository;
     @Value("${filter.server.url}")
     private String filterServerUrl;
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public RegistrySnapshot getRegistrySnapshot() {
+        long version = registryVersionRepository.findById(RegistryVersion.SINGLETON_ID).map(RegistryVersion::getVersion).orElse(0L);
+
+        List<Services> services = serviceRepository.findAll();
+
+        List<ServiceSnapshot> serviceSnapshots = services.stream().map(service -> {
+            List<EndpointSnapshot> endpoints = serviceInstanceRepository.findAllByServiceId(service.getServiceId()).stream().map(instance -> new EndpointSnapshot(instance.getInstanceId(), instance.getHost(), instance.getPort(), instance.getProtocol(), instance.getHealthPath())).toList();
+            return new ServiceSnapshot(service.getServiceName(), endpoints);
+        }).toList();
+        List<RouteRuleSnapshot> ruleSnapshots = services.stream().flatMap(service -> serviceRuleRepository.findAllByServiceId(service.getServiceId()).stream().map(rule -> new RouteRuleSnapshot(service.getServiceName(), rule.getPathPrefix(), rule.isStripPrefix()))).toList();
+        return new RegistrySnapshot(version, serviceSnapshots, ruleSnapshots);
+    }
+
     @Transactional(readOnly = true)
     public List<ServiceResponseDto> getServices() {
         return consoleRepository.getServices();
@@ -78,24 +88,28 @@ public class ConsoleService {
     public void registerService(ServiceProduceDto dto) {
         Services service = getOrCreateService(dto.getServiceName());
         registerServiceInstance(service.getServiceId(), dto);
+        updateRegistryVersion(dto.getRegistryVersion());
     }
 
     @Transactional
     public void removeService(ServiceProduceDto dto) {
         Services service = serviceRepository.findByServiceName(dto.getServiceName()).orElse(null);
         if (service == null) {
+            updateRegistryVersion(dto.getRegistryVersion());
             return;
         }
         serviceInstanceRepository.deleteByServiceIdAndInstanceId(service.getServiceId(), dto.getInstanceId());
         if (serviceInstanceRepository.countByServiceId(service.getServiceId()) == 0) {
             deleteService(service);
         }
+        updateRegistryVersion(dto.getRegistryVersion());
     }
 
     @Transactional
     public void replaceServiceRules(ServiceRuleProduceRequestDto dto) {
         Services service = getOrCreateService(dto.getServiceName());
         replaceServiceRules(service.getServiceId(), dto.getRegistryRuleDtoList());
+        updateRegistryVersion(dto.getRegistryVersion());
     }
 
     @Transactional
@@ -155,9 +169,11 @@ public class ConsoleService {
         filterClassRepository.save(new FilterClass(filterInfo.getFilterInfoId(), normalizedClassName, sourceCode));
         sendJavaFilter(normalizedFilterName, normalizedClassName, timing, pipeline, order, sourceBytes);
     }
+
     private Services getOrCreateService(String serviceName) {
         return serviceRepository.findByServiceName(serviceName).orElseGet(() -> serviceRepository.save(new Services(serviceName)));
     }
+
     private void registerServiceInstance(Long serviceId, ServiceProduceDto dto) {
         if (serviceInstanceRepository.existsByServiceIdAndInstanceId(serviceId, dto.getInstanceId())) {
             return;
@@ -195,6 +211,18 @@ public class ConsoleService {
         serviceMetricRepository.deleteAllByServiceId(serviceId);
         serviceInstanceRepository.deleteAllByServiceId(serviceId);
         serviceRepository.delete(service);
+    }
+
+    private void updateRegistryVersion(long version) {
+        if (version <= 0L) {
+            return;
+        }
+        RegistryVersion registryVersion = registryVersionRepository.findById(RegistryVersion.SINGLETON_ID).orElseGet(() -> new RegistryVersion(version));
+
+        if (version > registryVersion.getVersion()) {
+            registryVersion.updateVersion(version);
+        }
+        registryVersionRepository.save(registryVersion);
     }
 
     private FilterStage getOrCreateFilterStage(PipelineType pipeline, FilterTiming timing) {
@@ -278,18 +306,7 @@ public class ConsoleService {
     }
 
     private void sendJavaFilter(String filterName, String className, FilterTiming timing, PipelineType pipeline, int order, byte[] sourceBytes) {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(filterServerUrl))
-                .header("Content-Type", "text/x-java-source; charset=UTF-8")
-                .header("Filter-Name", filterName)
-                .header("Class-Name", className)
-                .header("Filter-Timing", timing.name())
-                .header("Filter-Pipeline", pipeline.name())
-                .header("Filter-Order", String.valueOf(order))
-                .header("Filter-File-Type", "JAVA")
-                .header("Filter-File-Hash", calculateSha256(sourceBytes))
-                .POST(HttpRequest.BodyPublishers.ofByteArray(sourceBytes))
-                .build();
+        HttpRequest request = HttpRequest.newBuilder().uri(URI.create(filterServerUrl)).header("Content-Type", "text/x-java-source; charset=UTF-8").header("Filter-Name", filterName).header("Class-Name", className).header("Filter-Timing", timing.name()).header("Filter-Pipeline", pipeline.name()).header("Filter-Order", String.valueOf(order)).header("Filter-File-Type", "JAVA").header("Filter-File-Hash", calculateSha256(sourceBytes)).POST(HttpRequest.BodyPublishers.ofByteArray(sourceBytes)).build();
         sendRequest(request);
     }
 
@@ -301,13 +318,15 @@ public class ConsoleService {
             throw new IllegalArgumentException();
         }
     }
+
     private byte[] readFile(MultipartFile sourceFile) {
         try {
-            return  sourceFile.getBytes();
+            return sourceFile.getBytes();
         } catch (IOException exception) {
             throw new IllegalArgumentException();
         }
     }
+
     private void sendRequest(HttpRequest request) {
         try {
             HttpResponse<Void> response = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
