@@ -1,6 +1,5 @@
 package io.jacksoon.common.handler;
 
-
 import io.jacksoon.common.util.HttpRequestCheck;
 
 import java.io.IOException;
@@ -14,6 +13,7 @@ public class AcceptHandler implements Handler {
     final HttpRequestCheck httpRequestCheck;
     final RequestSubmitter submitter;
     final IOStore ioStore;
+    final ClientConnectionLifecycle connectionLifecycle;
 
     public AcceptHandler(Selector selector, ServerSocketChannel serverSocketChannel, HttpRequestCheck httpRequestCheck, RequestSubmitter submitter, IOStore ioStore) {
         this.selector = selector;
@@ -21,6 +21,15 @@ public class AcceptHandler implements Handler {
         this.httpRequestCheck = httpRequestCheck;
         this.submitter = submitter;
         this.ioStore = ioStore;
+        this.connectionLifecycle = ClientConnectionLifecycle.NO_OP;
+    }
+    public AcceptHandler(Selector selector, ServerSocketChannel serverSocketChannel, HttpRequestCheck httpRequestCheck, RequestSubmitter submitter, IOStore ioStore, ClientConnectionLifecycle connectionLifecycle) {
+        this.selector = selector;
+        this.serverSocketChannel = serverSocketChannel;
+        this.httpRequestCheck = httpRequestCheck;
+        this.submitter = submitter;
+        this.ioStore = ioStore;
+        this.connectionLifecycle = connectionLifecycle;
     }
 
     @Override
@@ -31,7 +40,7 @@ public class AcceptHandler implements Handler {
                 if (socketChannel == null) {
                     return;
                 }
-                new IOHandler(selector, socketChannel, httpRequestCheck, submitter,ioStore);
+                new IOHandler(selector, socketChannel, httpRequestCheck, submitter, ioStore, connectionLifecycle);
             }
         } catch (IOException ex) {
             ex.printStackTrace();

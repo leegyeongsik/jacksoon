@@ -14,31 +14,47 @@ public class RouterApplication {
     private final CommonWorkerPool<RouterPipelineWorker> routerWorkerPool;
     private final CommonWorkerPool<RegistryCheckWorker> registryCheckWorkerPool;
     private final CommonWorkerPool<ConnectionReduceCheckWorker> connectionReduceCheckWorkerPool;
+    private final CommonWorkerPool<ClientConnectionMonitorWorker> clientConnectionMonitorWorkerPool;
     private final CommonWorkerPool<FilterWorker> filterWorkerPool;
     private final CommonWorkerPool<ProduceWorker<ProduceDto>> produceDtoPool;
     private final CommonWorkerPool<ProduceMetricWorker> serviceMetricWorkerPool;
     private final CommonWorkerPool<ProduceMetricWorker> filterMetricWorkerPool;
     private final CommonWorkerPool<ReRoutingWorker> reRoutingPool;
+    private final CommonWorkerPool<ClientConnectionMonitorWorker> coldClientConnectionMonitorPool;
+    private final CommonWorkerPool<ClientConnectionMonitorWorker> warmClientConnectionMonitorPool;
+    private final CommonWorkerPool<ClientConnectionMonitorWorker> hotClientConnectionMonitorPool;
+    private final CommonWorkerPool<ClientConnectionCloseWorker> clientConnectionClosePool;
+
     public RouterApplication(@Init("backendReactor") Reactor backendReactor,
                              @Init("clientReactor") Reactor clientReactor,
+                             @Init("coldClientConnectionMonitorPool") CommonWorkerPool<ClientConnectionMonitorWorker> coldClientConnectionMonitorPool,
+                             @Init("warmClientConnectionMonitorPool") CommonWorkerPool<ClientConnectionMonitorWorker> warmClientConnectionMonitorPool,
+                             @Init("hotClientConnectionMonitorPool") CommonWorkerPool<ClientConnectionMonitorWorker> hotClientConnectionMonitorPool,
+                             @Init("serviceMetricPool") CommonWorkerPool<ProduceMetricWorker> serviceMetricWorkerPool,
+                             @Init("filterMetricPool") CommonWorkerPool<ProduceMetricWorker> filterMetricWorkerPool,
                              CommonWorkerPool<RouterPipelineWorker> routerWorkerPool,
                              CommonWorkerPool<RegistryCheckWorker> registryCheckWorkerPool,
                              CommonWorkerPool<ConnectionReduceCheckWorker> connectionReduceCheckWorkerPool,
+                             CommonWorkerPool<ClientConnectionMonitorWorker> clientConnectionMonitorWorkerPool,
                              CommonWorkerPool<FilterWorker> filterWorkerPool,
                              CommonWorkerPool<ProduceWorker<ProduceDto>> produceDtoPool,
-                             @Init("serviceMetricPool")CommonWorkerPool<ProduceMetricWorker> serviceMetricWorkerPool,
-                             @Init("filterMetricPool")CommonWorkerPool<ProduceMetricWorker> filterMetricWorkerPool,
-                             CommonWorkerPool<ReRoutingWorker> reRoutingPool) {
+                             CommonWorkerPool<ReRoutingWorker> reRoutingPool,
+                             CommonWorkerPool<ClientConnectionCloseWorker> clientConnectionClosePool) {
         this.backendReactor = backendReactor;
         this.clientReactor = clientReactor;
         this.routerWorkerPool = routerWorkerPool;
         this.registryCheckWorkerPool = registryCheckWorkerPool;
         this.connectionReduceCheckWorkerPool = connectionReduceCheckWorkerPool;
+        this.clientConnectionMonitorWorkerPool = clientConnectionMonitorWorkerPool;
         this.filterWorkerPool = filterWorkerPool;
         this.produceDtoPool = produceDtoPool;
         this.serviceMetricWorkerPool = serviceMetricWorkerPool;
         this.filterMetricWorkerPool = filterMetricWorkerPool;
         this.reRoutingPool = reRoutingPool;
+        this.coldClientConnectionMonitorPool = coldClientConnectionMonitorPool;
+        this.warmClientConnectionMonitorPool = warmClientConnectionMonitorPool;
+        this.hotClientConnectionMonitorPool = hotClientConnectionMonitorPool;
+        this.clientConnectionClosePool = clientConnectionClosePool;
     }
 
     public void start() {
@@ -48,10 +64,17 @@ public class RouterApplication {
         routerWorkerPool.start();
         registryCheckWorkerPool.start();
         connectionReduceCheckWorkerPool.start();
+        clientConnectionMonitorWorkerPool.start();
         filterWorkerPool.start();
         produceDtoPool.start();
         serviceMetricWorkerPool.start();
         filterMetricWorkerPool.start();
         reRoutingPool.start();
+
+        coldClientConnectionMonitorPool.start();
+        warmClientConnectionMonitorPool.start();
+        hotClientConnectionMonitorPool.start();
+        clientConnectionClosePool.start();
+
     }
 }

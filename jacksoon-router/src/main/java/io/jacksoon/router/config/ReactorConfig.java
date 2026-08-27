@@ -4,6 +4,8 @@ import io.jacksoon.common.handler.AcceptHandler;
 import io.jacksoon.common.handler.Handler;
 import io.jacksoon.common.handler.IOStore;
 import io.jacksoon.common.handler.RequestSubmitter;
+import io.jacksoon.router.connection.client.ClientConnectionManager;
+import io.jacksoon.router.connection.client.ClientConnectionPolicy;
 import io.jacksoon.common.selector.Reactor;
 import io.jacksoon.common.util.HttpRequestCheck;
 import io.jacksoon.init.annotation.Init;
@@ -30,10 +32,31 @@ public class ReactorConfig {
     public ServerSocketChannel clientServerSocket() throws IOException {
         return ServerSocketChannel.open();
     }
-    @Init()
-    public IOStore ioStore(){
+
+    @Init
+    public ClientConnectionPolicy clientConnectionPolicy() {
+        return new ClientConnectionPolicy(
+                1_000L,
+                5_000L,
+                20_000L,
+                60_000L,
+                1.0,
+                5.0,
+                0.5,
+                2.0
+        );
+    }
+
+    @Init
+    public IOStore ioStore() {
         return new IOStore();
     }
+
+    @Init
+    public ClientConnectionManager clientConnectionManager(ClientConnectionPolicy connectionPolicy) {
+        return new ClientConnectionManager(connectionPolicy);
+    }
+
     @Init("clientReactor")
     public Reactor clientReactor(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, @Init("acceptHandler") Handler handler) throws Exception {
         Reactor reactor = new Reactor(selector);
@@ -43,8 +66,8 @@ public class ReactorConfig {
     }
 
     @Init("acceptHandler")
-    public Handler acceptHandler(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, RequestSubmitter submitter,IOStore ioStore) {
-        return new AcceptHandler(selector, serverSocketChannel, check, submitter,ioStore);
+    public Handler acceptHandler(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, RequestSubmitter submitter, IOStore ioStore, ClientConnectionManager connectionManager) {
+        return new AcceptHandler(selector, serverSocketChannel, check, submitter, ioStore, connectionManager);
     }
 
     @Init("backendReactor")

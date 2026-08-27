@@ -1,6 +1,5 @@
 package io.jacksoon.common.handler;
 
-
 import io.jacksoon.common.util.BufferUtils;
 import io.jacksoon.common.util.RequestCheck;
 import io.jacksoon.common.util.RequestCheckResult;
@@ -12,6 +11,7 @@ import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class IOHandler implements Handler {
@@ -24,19 +24,22 @@ public class IOHandler implements Handler {
     final RequestCheck requestCheck;
     final RequestSubmitter requestSubmitter;
     final IOStore ioStore;
+    final ClientConnectionLifecycle connectionLifecycle;
     private ResponseContext currentWriteResponse;
-    private boolean closed;
+    private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicInteger nextRequestSequence = new AtomicInteger(1);
 
-    IOHandler(Selector selector, SocketChannel socketChannel, RequestCheck requestCheck, RequestSubmitter requestSubmitter, IOStore ioStore) throws IOException {
+    public IOHandler(Selector selector, SocketChannel socketChannel, RequestCheck requestCheck, RequestSubmitter requestSubmitter, IOStore ioStore, ClientConnectionLifecycle connectionLifecycle) throws IOException {
         this.requestSubmitter = requestSubmitter;
         this.socketChannel = socketChannel;
         this.requestCheck = requestCheck;
+        this.connectionLifecycle = connectionLifecycle;
         this.socketChannel.configureBlocking(false);
         selectionKey = this.socketChannel.register(selector, SelectionKey.OP_READ);
         selectionKey.attach(this);
         this.ioStore = ioStore;
         ioStore.initClient(selectionKey);
+        connectionLifecycle.connected(selectionKey, this::close);
         selector.wakeup();
     }
 
@@ -48,7 +51,6 @@ public class IOHandler implements Handler {
             }
             if (selectionKey.isReadable()) {
                 boolean alive = read();
-
                 if (!alive) {
                     return;
                 }
@@ -59,7 +61,6 @@ public class IOHandler implements Handler {
             if (selectionKey.isWritable()) {
                 write();
             }
-
         } catch (IOException | CancelledKeyException ex) {
             close();
         }
@@ -74,13 +75,13 @@ public class IOHandler implements Handler {
         if (readCount == 0) {
             return true;
         }
+        connectionLifecycle.readActivity(selectionKey);
         readBuffer.flip();
         totalBuffer = BufferUtils.ensureCapacity(totalBuffer, readBuffer.remaining());
         RequestCheckResult result = requestCheck.check(readBuffer, totalBuffer);
         readBuffer.clear();
-
         processCompletedRequests(result);
-        return true;
+        return !closed.get();
     }
 
     private void processCompletedRequests(RequestCheckResult firstResult) {
@@ -89,13 +90,17 @@ public class IOHandler implements Handler {
             ByteBuffer ownedRequest = copyRequest(totalBuffer, result.requestLength());
             removeConsumedBytes(totalBuffer, result.requestLength());
             int sequence = nextRequestSequence.getAndIncrement();
-            requestSubmitter.submit(
-                    socketChannel,
-                    ownedRequest,
-                    result.headerLength(),
-                    selectionKey,
-                    new AtomicInteger(sequence)
-            );
+            boolean accepted = connectionLifecycle.requestSubmitted(selectionKey);
+            if (!accepted) {
+                close();
+                return;
+            }
+            try {
+                requestSubmitter.submit(socketChannel, ownedRequest, result.headerLength(), selectionKey, new AtomicInteger(sequence));
+            } catch (RuntimeException ex) {
+                connectionLifecycle.requestFailed(selectionKey);
+                throw ex;
+            }
             if (totalBuffer.position() == 0) {
                 return;
             }
@@ -127,7 +132,6 @@ public class IOHandler implements Handler {
                     return;
                 }
             }
-
             ByteBuffer byteBuffer = currentWriteResponse.byteBuffer();
             while (byteBuffer.hasRemaining()) {
                 int written = socketChannel.write(byteBuffer);
@@ -138,21 +142,20 @@ public class IOHandler implements Handler {
             boolean closeAfterWrite = currentWriteResponse.closeAfterWrite();
             currentWriteResponse = null;
             ioStore.responseCompleted(selectionKey);
-
+            connectionLifecycle.responseCompleted(selectionKey);
             if (closeAfterWrite) {
                 close();
                 return;
             }
         }
-        ioStore.addInterestOps(selectionKey, SelectionKey.OP_READ);
     }
 
-
-    private void close() {
-        if (closed) {
+    void close() {
+        if (!closed.compareAndSet(false, true)) {
             return;
         }
-        closed = true;
+
+        connectionLifecycle.closed(selectionKey);
         ioStore.removeClient(selectionKey);
         try {
             selectionKey.cancel();
