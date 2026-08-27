@@ -7,6 +7,9 @@ import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.util.CommonWorkerPool;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.router.connection.BackendConnectionPoolManager;
+import io.jacksoon.router.connection.client.ClientConnectionManager;
+import io.jacksoon.router.connection.client.ClientConnectionPolicy;
+import io.jacksoon.router.connection.client.ClientConnectionTier;
 import io.jacksoon.router.connection.RegistryCheckManager;
 import io.jacksoon.router.filter.FilterExecutor;
 import io.jacksoon.router.filter.FilterRequestSetting;
@@ -34,6 +37,27 @@ public class WorkerPoolConfig {
     @Init
     public CommonWorkerPool<ConnectionReduceCheckWorker> connectionReduceCheckWorkerPool(BackendConnectionPoolManager backendConnectionPoolManager) {
         return new CommonWorkerPool<>(1, () -> new ConnectionReduceCheckWorker(backendConnectionPoolManager, 5000L));
+    }
+
+
+    @Init("coldClientConnectionMonitorPool")
+    public CommonWorkerPool<ClientConnectionMonitorWorker> coldClientConnectionMonitorPool(ClientConnectionManager connectionManager, ClientConnectionPolicy connectionPolicy) {
+        return new CommonWorkerPool<>(1, () -> new ClientConnectionMonitorWorker(connectionManager, connectionPolicy, ClientConnectionTier.COLD));
+    }
+
+    @Init("warmClientConnectionMonitorPool")
+    public CommonWorkerPool<ClientConnectionMonitorWorker> warmClientConnectionMonitorPool(ClientConnectionManager connectionManager, ClientConnectionPolicy connectionPolicy) {
+        return new CommonWorkerPool<>(1, () -> new ClientConnectionMonitorWorker(connectionManager, connectionPolicy, ClientConnectionTier.WARM));
+    }
+
+    @Init("hotClientConnectionMonitorPool")
+    public CommonWorkerPool<ClientConnectionMonitorWorker> hotClientConnectionMonitorPool(ClientConnectionManager connectionManager, ClientConnectionPolicy connectionPolicy) {
+        return new CommonWorkerPool<>(1, () -> new ClientConnectionMonitorWorker(connectionManager, connectionPolicy, ClientConnectionTier.HOT));
+    }
+
+    @Init("clientConnectionClosePool")
+    public CommonWorkerPool<ClientConnectionCloseWorker> clientConnectionClosePool(ClientConnectionManager connectionManager) {
+        return new CommonWorkerPool<>(1, () -> new ClientConnectionCloseWorker(connectionManager));
     }
 
     @Init
