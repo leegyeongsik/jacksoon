@@ -12,6 +12,7 @@ import io.jacksoon.registry.worker.RegistryPipelineWorker;
 
 @Init
 public class RegistryApplication {
+    private final RegistryInitializer registryInitializer;
     private final Reactor registryReactor;
     private final Reactor endpointReactor;
     private final CommonWorkerPool<RegistryPipelineWorker> registryPipelineWorkerPool;
@@ -21,7 +22,15 @@ public class RegistryApplication {
     private final CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool;
 
 
-    public RegistryApplication(@Init("registryReactor") Reactor registryReactor, @Init("endpointReactor") Reactor endpointReactor, CommonWorkerPool<RegistryPipelineWorker> registryPipelineWorkerPool, CommonWorkerPool<EndpointConnectionWorker> endpointConnectionWorkerPool, CommonWorkerPool<EndPointHealthCheckWorker> healthCheckWorker, CommonWorkerPool<EndPointEventWorker> eventWorker, CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool) {
+    public RegistryApplication(RegistryInitializer registryInitializer,
+                               @Init("registryReactor") Reactor registryReactor,
+                               @Init("endpointReactor") Reactor endpointReactor,
+                               CommonWorkerPool<RegistryPipelineWorker> registryPipelineWorkerPool,
+                               CommonWorkerPool<EndpointConnectionWorker> endpointConnectionWorkerPool,
+                               CommonWorkerPool<EndPointHealthCheckWorker> healthCheckWorker,
+                               CommonWorkerPool<EndPointEventWorker> eventWorker,
+                               CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool) {
+        this.registryInitializer = registryInitializer;
         this.registryReactor = registryReactor;
         this.endpointReactor = endpointReactor;
         this.registryPipelineWorkerPool = registryPipelineWorkerPool;
@@ -29,10 +38,10 @@ public class RegistryApplication {
         this.healthCheckWorker = healthCheckWorker;
         this.eventWorker = eventWorker;
         this.produceWorkerPool = produceWorkerPool;
-
     }
 
     public void start() {
+        registryInitializer.initialize();
         new Thread(registryReactor, "registry-reactor").start();
         new Thread(endpointReactor, "endpoint-reactor").start();
 

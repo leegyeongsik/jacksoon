@@ -11,7 +11,6 @@ import java.time.Instant;
 
 @Getter
 @NoArgsConstructor
-
 public class RegistryProduceDto extends ProduceDto {
     private RegistryAction action;
     private String serviceName;
@@ -21,10 +20,12 @@ public class RegistryProduceDto extends ProduceDto {
     private String protocol;
     private String healthPath;
     private String reason;
+    private long registryVersion;
 
     public RegistryProduceDto(RegistryAction action,
                               RegisteredEndpoint endpoint,
                               String reason,
+                              long registryVersion,
                               ProduceHint hint,
                               ProducerType producerType,
                               Instant occurredAt) {
@@ -37,5 +38,6 @@ public class RegistryProduceDto extends ProduceDto {
         this.protocol = endpoint.getProtocol();
         this.healthPath = endpoint.getHealthPath();
         this.reason = reason;
+        this.registryVersion = registryVersion;
     }
 }

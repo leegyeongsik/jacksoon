@@ -9,17 +9,17 @@ import java.util.List;
 
 @Init
 public class RouterRegistryStore {
+    private volatile long version = -1L;
     private volatile List<RouteRuleSnapshot> routeRules = List.of();
 
-    public void save(RegistrySnapshot snapshot) {
-        this.routeRules = snapshot.getRules()
-                .stream()
-                .sorted(Comparator.comparingInt(
-                        (RouteRuleSnapshot rule) -> rule.getPathPrefix().length()
-                ).reversed())
-                .toList();
+    public long version() {
+        return version;
     }
-
+    public void save(RegistrySnapshot snapshot) {
+        List<RouteRuleSnapshot> rules = snapshot.getRules() == null ? List.of() : snapshot.getRules();
+        this.routeRules = rules.stream().sorted(Comparator.comparingInt((RouteRuleSnapshot rule) -> rule.getPathPrefix().length()).reversed()).toList();
+        this.version = snapshot.getVersion();
+    }
     public ResolvedRoute resolve(String path) {
         for (RouteRuleSnapshot rule : routeRules) {
             if (matchesPrefix(path, rule.getPathPrefix())) {

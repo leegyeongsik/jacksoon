@@ -1,22 +1,26 @@
 package io.jacksoon.registry.store;
 
 import io.jacksoon.common.produce.dto.ProduceDto;
+import io.jacksoon.common.produce.dto.ProduceHint;
+import io.jacksoon.common.produce.dto.ProducerType;
+import io.jacksoon.common.registry.dto.response.EndpointSnapshot;
+import io.jacksoon.common.registry.dto.response.RegistrySnapshot;
+import io.jacksoon.common.registry.dto.response.RouteRuleSnapshot;
+import io.jacksoon.common.registry.dto.response.ServiceSnapshot;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.registry.dto.produce.RegistryAction;
+import io.jacksoon.registry.dto.produce.RegistryProduceDto;
 import io.jacksoon.registry.dto.produce.RegistryProduceRule;
 import io.jacksoon.registry.dto.produce.RegistryRuleProduceDto;
 import io.jacksoon.registry.dto.request.EndpointInfo;
 import io.jacksoon.registry.dto.request.RegistryRegisterRequest;
 import io.jacksoon.registry.dto.request.RouteRule;
-import io.jacksoon.registry.dto.response.EndpointSnapshot;
-import io.jacksoon.registry.dto.response.RegistrySnapshot;
-import io.jacksoon.registry.dto.response.RouteRuleSnapshot;
-import io.jacksoon.registry.dto.response.ServiceSnapshot;
 import io.jacksoon.registry.store.entity.RegisteredEndpoint;
 import io.jacksoon.registry.store.entity.RegisteredRouteRule;
 import io.jacksoon.registry.store.entity.RegisteredService;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -27,16 +31,50 @@ public class RegistryStore {
     private final Map<String, RegisteredService> serviceMap = new ConcurrentHashMap<>();
     private final List<RegisteredRouteRule> routeRules = new ArrayList<>();
     private final CommonBlockingQueue<ProduceDto> produceDtoQueue;
+    private long version;
 
     public RegistryStore(CommonBlockingQueue<ProduceDto> produceDtoQueue) {
         this.produceDtoQueue = produceDtoQueue;
     }
 
+    public synchronized void initialize(RegistrySnapshot snapshot) {
+        serviceMap.clear();
+        routeRules.clear();
+
+        List<ServiceSnapshot> services = snapshot.getServices() == null ? List.of() : snapshot.getServices();
+
+        for (ServiceSnapshot serviceSnapshot : services) {
+            RegisteredService service = new RegisteredService(serviceSnapshot.getServiceName());
+
+            List<EndpointSnapshot> endpoints = serviceSnapshot.getEndpoints() == null ? List.of() : serviceSnapshot.getEndpoints();
+
+            for (EndpointSnapshot endpoint : endpoints) {
+                service.putEndpoint(new RegisteredEndpoint(
+                        serviceSnapshot.getServiceName(),
+                        endpoint.getInstanceId(),
+                        endpoint.getHost(),
+                        endpoint.getPort(),
+                        endpoint.getProtocol(),
+                        endpoint.getHealthPath(),
+                        "active"
+                ));
+            }
+
+            serviceMap.put(serviceSnapshot.getServiceName(), service);
+        }
+
+        List<RouteRuleSnapshot> rules = snapshot.getRules() == null ? List.of() : snapshot.getRules();
+
+        for (RouteRuleSnapshot rule : rules) {
+            routeRules.add(new RegisteredRouteRule(rule.getServiceName(), rule.getPathPrefix(), rule.isStripPrefix()));
+        }
+        version = snapshot.getVersion();
+    }
+
     public synchronized void add(RegistryRegisterRequest request) {
-        RegisteredService service = serviceMap.computeIfAbsent(request.getServiceName(), serviceName -> new RegisteredService(serviceName, produceDtoQueue));
+        RegisteredService service = serviceMap.computeIfAbsent(request.getServiceName(), RegisteredService::new);
 
         EndpointInfo endpoint = request.getEndpoint();
-
         RegisteredEndpoint registeredEndpoint = new RegisteredEndpoint(
                 request.getServiceName(),
                 request.getInstanceId(),
@@ -47,22 +85,30 @@ public class RegistryStore {
                 "pending"
         );
 
-        service.putEndpoint(registeredEndpoint);
+        RegisteredEndpoint previous = service.putEndpoint(registeredEndpoint);
+        if (previous != null && "active".equals(previous.getStatus())) {
+            long nextVersion = nextVersion();
+            produceDtoQueue.put(new RegistryProduceDto(
+                    RegistryAction.REMOVE,
+                    previous,
+                    "endpoint re-register pending",
+                    nextVersion,
+                    ProduceHint.SERVICE,
+                    ProducerType.REGISTRY,
+                    Instant.now()
+            ));
+        }
 
         if (request.getRules() != null && !request.getRules().isEmpty()) {
             removeOldRules(request.getServiceName());
             List<RegistryRuleProduceDto> registeredRouteRules = new ArrayList<>();
             for (RouteRule rule : request.getRules()) {
-                RegisteredRouteRule registeredRouteRule = new RegisteredRouteRule(request.getServiceName(), rule.getPathPrefix(), rule.isStripPrefix());
-                routeRules.add(registeredRouteRule);
+                routeRules.add(new RegisteredRouteRule(request.getServiceName(), rule.getPathPrefix(), rule.isStripPrefix()));
                 registeredRouteRules.add(new RegistryRuleProduceDto(rule.getPathPrefix(), rule.isStripPrefix()));
             }
-            produceDtoQueue.put(new RegistryProduceRule(request.getServiceName(), RegistryAction.REGISTER_RULE, registeredRouteRules));
+            long nextVersion = nextVersion();
+            produceDtoQueue.put(new RegistryProduceRule(request.getServiceName(), RegistryAction.REGISTER_RULE, registeredRouteRules, nextVersion));
         }
-    }
-
-    private void removeOldRules(String serviceName) {
-        routeRules.removeIf(rule -> rule.getServiceName().equals(serviceName));
     }
 
     public synchronized RegistrySnapshot snapshot() {
@@ -78,14 +124,16 @@ public class RegistryStore {
                                     endpoint.getHealthPath()
                             ))
                             .toList();
-
                     return new ServiceSnapshot(service.getServiceName(), endpoints);
                 })
                 .toList();
 
         List<RouteRuleSnapshot> rules = routeRules.stream().map(rule -> new RouteRuleSnapshot(rule.getServiceName(), rule.getPathPrefix(), rule.isStripPrefix())).toList();
+        return new RegistrySnapshot(version, services, rules);
+    }
 
-        return new RegistrySnapshot(services, rules);
+    public synchronized long version() {
+        return version;
     }
 
     public synchronized void removeEndpoint(String serviceName, String instanceId) {
@@ -93,11 +141,28 @@ public class RegistryStore {
         if (service == null) {
             return;
         }
-        service.removeEndpoint(instanceId);
-        if (service.endpoints().isEmpty()) {
+        RegisteredEndpoint removed = service.removeEndpoint(instanceId);
+        if (removed == null) {
+            return;
+        }
+        boolean serviceRemoved = service.endpoints().isEmpty();
+        if (serviceRemoved) {
             serviceMap.remove(serviceName);
             removeOldRules(serviceName);
         }
+        if (!"active".equals(removed.getStatus()) && !serviceRemoved) {
+            return;
+        }
+        long nextVersion = nextVersion();
+        produceDtoQueue.put(new RegistryProduceDto(
+                RegistryAction.REMOVE,
+                removed,
+                "unconnection-service",
+                nextVersion,
+                ProduceHint.SERVICE,
+                ProducerType.REGISTRY,
+                Instant.now()
+        ));
     }
 
     public synchronized void successEndpoint(String serviceName, String instanceId) {
@@ -105,6 +170,28 @@ public class RegistryStore {
         if (service == null) {
             return;
         }
-        service.successEndPoint(instanceId);
+        RegisteredEndpoint endpoint = service.getEndpoint(instanceId);
+        if (endpoint == null || "active".equals(endpoint.getStatus())) {
+            return;
+        }
+        endpoint.setStatus("active");
+        long nextVersion = nextVersion();
+        produceDtoQueue.put(new RegistryProduceDto(
+                RegistryAction.REGISTER,
+                endpoint,
+                "active-service",
+                nextVersion,
+                ProduceHint.SERVICE,
+                ProducerType.REGISTRY,
+                Instant.now()
+        ));
+    }
+
+    private long nextVersion() {
+        return ++version;
+    }
+
+    private void removeOldRules(String serviceName) {
+        routeRules.removeIf(rule -> rule.getServiceName().equals(serviceName));
     }
 }

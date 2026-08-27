@@ -14,6 +14,7 @@ import io.jacksoon.registry.connection.event.EndPointEventRegistry;
 import io.jacksoon.registry.handle.EndPointConnectionHandler;
 import io.jacksoon.registry.pipeline.context.RegistryPipelineContext;
 import io.jacksoon.registry.pipeline.executor.RegistryPipelineTaskExecutor;
+import io.jacksoon.registry.store.RegistryStore;
 import io.jacksoon.registry.worker.EndPointEventWorker;
 import io.jacksoon.registry.worker.EndPointHealthCheckWorker;
 import io.jacksoon.registry.worker.EndpointConnectionWorker;
@@ -27,8 +28,8 @@ public class WorkerPoolConfig {
     }
 
     @Init
-    public CommonWorkerPool<EndpointConnectionWorker> endpointConnectionWorkerPool(EndPointConnectionManager connectionManager, CommonBlockingQueue<EndpointConnectionContext> endpointConnectionQueue) {
-        return new CommonWorkerPool<>(1, () -> new EndpointConnectionWorker(endpointConnectionQueue, connectionManager));
+    public CommonWorkerPool<EndpointConnectionWorker> endpointConnectionWorkerPool(EndPointConnectionManager connectionManager, CommonBlockingQueue<EndpointConnectionContext> endpointConnectionQueue, RegistryStore registryStore) {
+        return new CommonWorkerPool<>(1, () -> new EndpointConnectionWorker(endpointConnectionQueue, connectionManager, registryStore));
     }
 
     @Init

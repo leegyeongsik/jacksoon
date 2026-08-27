@@ -16,8 +16,11 @@ public class RegistryCheckManager {
         this.routerRegistryStore = routerRegistryStore;
         this.poolManager = poolManager;
     }
-
     public void refresh() {
+        long remoteVersion = registryClient.version();
+        if (remoteVersion == routerRegistryStore.version()) {
+            return;
+        }
         RegistrySnapshot snapshot = registryClient.snapshot();
         poolManager.sync(snapshot);
         routerRegistryStore.save(snapshot);

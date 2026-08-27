@@ -3,10 +3,10 @@ package io.jacksoon.console.repository.service;
 import io.jacksoon.console.entity.service.ServiceInstance;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.util.Optional;
+import java.util.List;
 
 public interface ServiceInstanceRepository extends JpaRepository<ServiceInstance,Long> {
-    Optional<ServiceInstance> findByServiceIdAndInstanceId(Long serviceId, String instanceId);
+    List<ServiceInstance> findAllByServiceId(Long serviceId);
     long countByServiceId(Long serviceId);
     void deleteByServiceIdAndInstanceId(Long serviceId, String instanceId);
     void deleteAllByServiceId(Long serviceId);
