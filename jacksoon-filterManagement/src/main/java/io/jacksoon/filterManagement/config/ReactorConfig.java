@@ -34,9 +34,9 @@ public class ReactorConfig {
     }
 
     @Init("FilterReactor")
-    public Reactor filterReactor(@Init("FilterSelector") Selector selector, @Init("FilterServerSocket") ServerSocketChannel serverSocketChannel, @Init("FilterAcceptHandler") Handler handler, ExceptionDispatcher exceptionDispatcher) throws Exception {
+    public Reactor filterReactor(@Init("FilterSelector") Selector selector, @Init("FilterServerSocket") ServerSocketChannel serverSocketChannel, @Init("FilterAcceptHandler") Handler handler, ExceptionDispatcher exceptionDispatcher, FilterManagementProperties properties) throws Exception {
         Reactor reactor = new Reactor(selector, exceptionDispatcher);
-        serverSocketChannel.socket().bind(new InetSocketAddress(1011));
+        serverSocketChannel.socket().bind(new InetSocketAddress(properties.server().port()));
         reactor.register(serverSocketChannel, handler, SelectionKey.OP_ACCEPT);
         return reactor;
     }

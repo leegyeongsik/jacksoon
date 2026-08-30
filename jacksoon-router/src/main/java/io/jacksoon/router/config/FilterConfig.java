@@ -8,10 +8,11 @@ import java.net.URI;
 @Init
 public class FilterConfig {
     @Init
-    public FilterRequestSetting filterRequestSetting() {
+    public FilterRequestSetting filterRequestSetting(RouterProperties properties) {
+        String baseUrl = properties.filter().baseUrl();
         return new FilterRequestSetting(
-                URI.create("http://127.0.0.1:1011/version"),
-                URI.create("http://127.0.0.1:1011/bundle")
+                URI.create(baseUrl + "/version"),
+                URI.create(baseUrl + "/bundle")
         );
     }
 }

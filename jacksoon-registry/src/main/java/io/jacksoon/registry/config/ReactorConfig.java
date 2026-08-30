@@ -33,9 +33,9 @@ public class ReactorConfig {
     }
 
     @Init("registryReactor")
-    public Reactor registryReactor(@Init("registrySelector") Selector selector, @Init("registryServerSocket") ServerSocketChannel serverSocketChannel, @Init("registryAcceptHandler") Handler handler, ExceptionDispatcher exceptionDispatcher) throws Exception {
+    public Reactor registryReactor(@Init("registrySelector") Selector selector, @Init("registryServerSocket") ServerSocketChannel serverSocketChannel, @Init("registryAcceptHandler") Handler handler, ExceptionDispatcher exceptionDispatcher, RegistryProperties properties) throws Exception {
         Reactor reactor = new Reactor(selector, exceptionDispatcher);
-        serverSocketChannel.socket().bind(new InetSocketAddress(1013));
+        serverSocketChannel.socket().bind(new InetSocketAddress(properties.server().port()));
         reactor.register(serverSocketChannel, handler, SelectionKey.OP_ACCEPT);
         return reactor;
     }

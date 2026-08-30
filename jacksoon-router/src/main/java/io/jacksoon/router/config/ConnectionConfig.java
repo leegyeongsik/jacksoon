@@ -8,6 +8,8 @@ import io.jacksoon.common.util.HttpRequestCheck;
 import io.jacksoon.common.util.HttpResponseCheck;
 import io.jacksoon.init.annotation.Init;
 
+import java.nio.file.Path;
+
 @Init
 public class ConnectionConfig {
     @Init
@@ -28,7 +30,7 @@ public class ConnectionConfig {
     }
 
     @Init
-    public FileStore fileStore(){
-        return new FileStore(objectMapper());
+    public FileStore fileStore(ObjectMapper objectMapper, RouterProperties properties){
+        return new FileStore(objectMapper, Path.of(properties.metric().directory()));
     }
 }

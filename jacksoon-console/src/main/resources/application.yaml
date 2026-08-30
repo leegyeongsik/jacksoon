@@ -5,7 +5,7 @@ spring:
     name: jacksoon-console
   datasource:
     url: jdbc:postgresql://localhost:5432/jacksoon_console
-    username: postgres
+    username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
   jpa:
     hibernate:
@@ -17,3 +17,6 @@ spring:
 filter:
   server:
     url: ${FILTER_SERVER_URL:http://localhost:1011/filter}
+
+metric:
+  directory: ${METRIC_DIRECTORY:D:/jacksoon/metric}

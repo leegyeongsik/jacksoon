@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.common.registry.dto.response.RegistrySnapshot;
 import io.jacksoon.common.registry.dto.response.RegistryVersionResponse;
 import io.jacksoon.init.annotation.Init;
+import io.jacksoon.router.config.RouterProperties;
 import io.jacksoon.router.exception.RouterRegistryException;
 
 import java.net.URI;
@@ -16,11 +17,14 @@ public class RegistryClient {
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper;
 
-    private final String versionUrl = "http://localhost:1013/version";
-    private final String snapshotUrl = "http://localhost:1013/snapshot";
+    private final String versionUrl;
+    private final String snapshotUrl;
 
-    public RegistryClient(ObjectMapper objectMapper) {
+    public RegistryClient(ObjectMapper objectMapper, RouterProperties properties) {
         this.objectMapper = objectMapper;
+        String baseUrl = properties.registry().baseUrl();
+        this.versionUrl = baseUrl + "/version";
+        this.snapshotUrl = baseUrl + "/snapshot";
     }
     public long version() {
         RegistryVersionResponse response = get(versionUrl, RegistryVersionResponse.class);

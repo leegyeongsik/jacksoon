@@ -3,6 +3,7 @@ package io.jacksoon.filterManagement.pipeline.util;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.common.filter.FilterBundleMetadata;
 import io.jacksoon.common.filter.FilterConfigDto;
+import io.jacksoon.filterManagement.config.FilterManagementProperties;
 import io.jacksoon.filterManagement.exception.FilterBundleException;
 import io.jacksoon.filterManagement.exception.FilterCompileException;
 import io.jacksoon.filterManagement.exception.InvalidFilterRequestException;
@@ -23,19 +24,14 @@ import java.util.stream.Stream;
 @Init
 public class Jar {
 
-    private static final String METADATA_ENTRY_NAME =
-            "META-INF/filter-bundle.json";
-
-    private final Path workRoot =
-            Path.of("plugins/work");
-
-    private final Path bundleRoot =
-            Path.of("plugins/bundles");
-
+    private static final String METADATA_ENTRY_NAME = "META-INF/filter-bundle.json";
+    private final Path workRoot;
+    private final Path bundleRoot;
     private final ObjectMapper objectMapper;
-
-    public Jar(ObjectMapper objectMapper) {
+    public Jar(ObjectMapper objectMapper, FilterManagementProperties properties) {
         this.objectMapper = objectMapper;
+        this.workRoot = Path.of(properties.directory().work());
+        this.bundleRoot = Path.of(properties.directory().bundle());
     }
 
     public Path create(FilterConfigDto config, long version) {

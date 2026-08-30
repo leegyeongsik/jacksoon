@@ -6,6 +6,7 @@ import io.jacksoon.common.filter.FilterConfigDto;
 import io.jacksoon.common.filter.FilterRegistryKey;
 import io.jacksoon.common.filter.RouterFilter;
 import io.jacksoon.init.annotation.Init;
+import io.jacksoon.router.config.RouterProperties;
 import io.jacksoon.router.exception.RouterFilterException;
 
 import java.io.IOException;
@@ -33,13 +34,14 @@ import java.util.jar.JarFile;
 public class FilterLoad {
 
     private static final String METADATA_ENTRY_NAME = "META-INF/filter-bundle.json";
-    private final Path bundleRoot = Path.of("plugins/filter-bundles");
+    private final Path bundleRoot;
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final FilterRegistry filterRegistry;
 
-    public FilterLoad(FilterRegistry filterRegistry) {
+    public FilterLoad(FilterRegistry filterRegistry, RouterProperties properties) {
         this.filterRegistry = filterRegistry;
+        this.bundleRoot = Path.of(properties.filter().bundleDirectory());
     }
 
     public long requestVersion(String path) {
