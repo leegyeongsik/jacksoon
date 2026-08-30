@@ -11,8 +11,6 @@ import java.net.http.HttpClient;
 
 @Init
 public class CommonConfig {
-    private final String PATH = "http://localhost:1014/consumer";
-
     @Init
     public HttpRequestCheck httpRequestCheck() {
         return new HttpRequestCheck();
@@ -25,7 +23,8 @@ public class CommonConfig {
         return objectMapper;
     }
     @Init
-    public SendStore sendStore(){
-        return new SendStore(objectMapper(),PATH, HttpClient.newBuilder().build());
+    public SendStore sendStore(ObjectMapper objectMapper, RegistryProperties properties){
+        String path = properties.console().baseUrl() + "/consumer";
+        return new SendStore(objectMapper, path, HttpClient.newBuilder().build());
     }
 }

@@ -3,6 +3,7 @@ package io.jacksoon.filterManagement.store;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.common.filter.FilterBundleMetadata;
 import io.jacksoon.common.filter.FilterConfigDto;
+import io.jacksoon.filterManagement.config.FilterManagementProperties;
 import io.jacksoon.filterManagement.exception.FilterStoreException;
 import io.jacksoon.init.annotation.Init;
 
@@ -24,15 +25,17 @@ public class FilterStoreInitializer {
     private static final Pattern BUNDLE_FILE_PATTERN = Pattern.compile("bundle-(\\d+)\\.jar");
     private static final Pattern VERSION_DIRECTORY_PATTERN = Pattern.compile("\\d+");
 
-    private final Path bundleRoot = Path.of("plugins/bundles");
-    private final Path workRoot = Path.of("plugins/work");
+    private final Path bundleRoot;
+    private final Path workRoot;
 
     private final FilterStore filterStore;
     private final ObjectMapper objectMapper;
 
-    public FilterStoreInitializer(FilterStore filterStore, ObjectMapper objectMapper) {
+    public FilterStoreInitializer(FilterStore filterStore, ObjectMapper objectMapper, FilterManagementProperties properties) {
         this.filterStore = filterStore;
         this.objectMapper = objectMapper;
+        this.bundleRoot = Path.of(properties.directory().bundle());
+        this.workRoot = Path.of(properties.directory().work());
     }
 
     public void initialize() {

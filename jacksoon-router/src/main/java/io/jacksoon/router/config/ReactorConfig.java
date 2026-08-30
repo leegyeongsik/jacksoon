@@ -59,9 +59,9 @@ public class ReactorConfig {
     }
 
     @Init("clientReactor")
-    public Reactor clientReactor(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, @Init("acceptHandler") Handler handler, ExceptionDispatcher exceptionDispatcher) throws Exception {
+    public Reactor clientReactor(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, @Init("acceptHandler") Handler handler, ExceptionDispatcher exceptionDispatcher, RouterProperties properties) throws Exception {
         Reactor reactor = new Reactor(selector, exceptionDispatcher);
-        serverSocketChannel.socket().bind(new InetSocketAddress(1012), 512);
+        serverSocketChannel.socket().bind(new InetSocketAddress(properties.server().port()), properties.server().backlog());
         reactor.register(serverSocketChannel, handler, SelectionKey.OP_ACCEPT);
         return reactor;
     }

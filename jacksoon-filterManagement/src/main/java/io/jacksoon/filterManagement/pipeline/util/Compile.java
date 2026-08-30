@@ -2,6 +2,7 @@ package io.jacksoon.filterManagement.pipeline.util;
 
 import io.jacksoon.common.filter.FilterConfigDto;
 import io.jacksoon.filterManagement.exception.FilterCompileException;
+import io.jacksoon.filterManagement.config.FilterManagementProperties;
 import io.jacksoon.filterManagement.exception.InvalidFilterRequestException;
 import io.jacksoon.init.annotation.Init;
 
@@ -15,7 +16,11 @@ import java.util.Comparator;
 @Init
 public class Compile {
 
-    private final Path workRoot = Path.of("plugins/work");
+    private final Path workRoot;
+
+    public Compile(FilterManagementProperties properties) {
+        this.workRoot = Path.of(properties.directory().work());
+    }
 
     public void compile(byte[] sourceBytes, FilterConfigDto config, long version) {
         validate(sourceBytes, config, version);
