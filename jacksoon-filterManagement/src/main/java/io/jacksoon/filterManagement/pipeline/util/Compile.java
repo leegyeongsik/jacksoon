@@ -1,6 +1,8 @@
 package io.jacksoon.filterManagement.pipeline.util;
 
 import io.jacksoon.common.filter.FilterConfigDto;
+import io.jacksoon.filterManagement.exception.FilterCompileException;
+import io.jacksoon.filterManagement.exception.InvalidFilterRequestException;
 import io.jacksoon.init.annotation.Init;
 
 import javax.tools.JavaCompiler;
@@ -28,14 +30,14 @@ public class Compile {
             Files.write(javaFile, sourceBytes);
             compileSource(javaFile, classRoot);
         } catch (IOException exception) {
-            throw new IllegalStateException(exception);
+            throw new FilterCompileException("Failed to prepare filter compile workspace", exception);
         }
     }
 
     private void compileSource(Path javaFile, Path classRoot) {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
-            throw new IllegalStateException();
+            throw new FilterCompileException("Java compiler is unavailable");
         }
         int result = compiler.run(
                 null,
@@ -48,7 +50,7 @@ public class Compile {
                 javaFile.toString()
         );
         if (result != 0) {
-            throw new IllegalStateException();
+            throw new FilterCompileException("Filter source compilation failed. file=" + javaFile);
         }
     }
 
@@ -69,13 +71,13 @@ public class Compile {
 
     private void validate(byte[] sourceBytes, FilterConfigDto config, long version) {
         if (sourceBytes == null || sourceBytes.length == 0) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("Filter source body is empty");
         }
         if (config == null) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("Filter config is null");
         }
         if (version < 1) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("Filter version must be greater than zero");
         }
     }
 }

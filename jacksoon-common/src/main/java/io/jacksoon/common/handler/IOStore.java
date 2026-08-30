@@ -22,6 +22,7 @@ public class IOStore {
                 return;
             }
             state.queue.offer(responseContext);
+            discardStaleResponsesLocked(state);
             ResponseContext head = state.queue.peek();
             if (head != null && head.sequence() == state.nextSequence) {
                 addInterestOpsLocked(selectionKey, SelectionKey.OP_WRITE);
@@ -36,6 +37,7 @@ public class IOStore {
         }
 
         synchronized (state) {
+            discardStaleResponsesLocked(state);
             ResponseContext head = state.queue.peek();
             if (head == null || head.sequence() != state.nextSequence) {
                 removeInterestOpsLocked(selectionKey, SelectionKey.OP_WRITE);
@@ -56,32 +58,16 @@ public class IOStore {
         }
     }
 
-    void addInterestOps(SelectionKey selectionKey, int ops) {
-        ClientState state = clientMap.get(selectionKey);
-        if (state == null) {
-            return;
-        }
-
-        synchronized (state) {
-            addInterestOpsLocked(selectionKey, ops);
-        }
-        selectionKey.selector().wakeup();
-    }
-
-    void removeInterestOps(SelectionKey selectionKey, int ops) {
-        ClientState state = clientMap.get(selectionKey);
-        if (state == null) {
-            return;
-        }
-
-        synchronized (state) {
-            removeInterestOpsLocked(selectionKey, ops);
-        }
-        selectionKey.selector().wakeup();
-    }
-
     void removeClient(SelectionKey selectionKey) {
         clientMap.remove(selectionKey);
+    }
+
+    private void discardStaleResponsesLocked(ClientState state) {
+        ResponseContext head = state.queue.peek();
+        while (head != null && head.sequence() < state.nextSequence) {
+            state.queue.poll();
+            head = state.queue.peek();
+        }
     }
 
     private void addInterestOpsLocked(SelectionKey selectionKey, int ops) {

@@ -3,6 +3,7 @@ package io.jacksoon.common.handler;
 import io.jacksoon.common.util.HttpRequestCheck;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
@@ -43,7 +44,7 @@ public class AcceptHandler implements Handler {
                 new IOHandler(selector, socketChannel, httpRequestCheck, submitter, ioStore, connectionLifecycle);
             }
         } catch (IOException ex) {
-            ex.printStackTrace();
+            throw new UncheckedIOException("Failed to accept client connection", ex);
         }
     }
 }

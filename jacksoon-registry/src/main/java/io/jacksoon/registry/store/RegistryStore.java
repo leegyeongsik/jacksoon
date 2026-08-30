@@ -32,6 +32,7 @@ public class RegistryStore {
     private final List<RegisteredRouteRule> routeRules = new ArrayList<>();
     private final CommonBlockingQueue<ProduceDto> produceDtoQueue;
     private long version;
+    private long registrationSequence;
 
     public RegistryStore(CommonBlockingQueue<ProduceDto> produceDtoQueue) {
         this.produceDtoQueue = produceDtoQueue;
@@ -40,14 +41,12 @@ public class RegistryStore {
     public synchronized void initialize(RegistrySnapshot snapshot) {
         serviceMap.clear();
         routeRules.clear();
+        registrationSequence = 0L;
 
         List<ServiceSnapshot> services = snapshot.getServices() == null ? List.of() : snapshot.getServices();
-
         for (ServiceSnapshot serviceSnapshot : services) {
             RegisteredService service = new RegisteredService(serviceSnapshot.getServiceName());
-
             List<EndpointSnapshot> endpoints = serviceSnapshot.getEndpoints() == null ? List.of() : serviceSnapshot.getEndpoints();
-
             for (EndpointSnapshot endpoint : endpoints) {
                 service.putEndpoint(new RegisteredEndpoint(
                         serviceSnapshot.getServiceName(),
@@ -56,6 +55,7 @@ public class RegistryStore {
                         endpoint.getPort(),
                         endpoint.getProtocol(),
                         endpoint.getHealthPath(),
+                        0L,
                         "active"
                 ));
             }
@@ -71,8 +71,9 @@ public class RegistryStore {
         version = snapshot.getVersion();
     }
 
-    public synchronized void add(RegistryRegisterRequest request) {
+    public synchronized long add(RegistryRegisterRequest request) {
         RegisteredService service = serviceMap.computeIfAbsent(request.getServiceName(), RegisteredService::new);
+        long registrationId = ++registrationSequence;
 
         EndpointInfo endpoint = request.getEndpoint();
         RegisteredEndpoint registeredEndpoint = new RegisteredEndpoint(
@@ -82,6 +83,7 @@ public class RegistryStore {
                 endpoint.getPort(),
                 endpoint.getProtocol(),
                 endpoint.getHealthPath(),
+                registrationId,
                 "pending"
         );
 
@@ -109,6 +111,7 @@ public class RegistryStore {
             long nextVersion = nextVersion();
             produceDtoQueue.put(new RegistryProduceRule(request.getServiceName(), RegistryAction.REGISTER_RULE, registeredRouteRules, nextVersion));
         }
+        return registrationId;
     }
 
     public synchronized RegistrySnapshot snapshot() {
@@ -128,7 +131,9 @@ public class RegistryStore {
                 })
                 .toList();
 
-        List<RouteRuleSnapshot> rules = routeRules.stream().map(rule -> new RouteRuleSnapshot(rule.getServiceName(), rule.getPathPrefix(), rule.isStripPrefix())).toList();
+        List<RouteRuleSnapshot> rules = routeRules.stream()
+                .map(rule -> new RouteRuleSnapshot(rule.getServiceName(), rule.getPathPrefix(), rule.isStripPrefix()))
+                .toList();
         return new RegistrySnapshot(version, services, rules);
     }
 
@@ -136,9 +141,13 @@ public class RegistryStore {
         return version;
     }
 
-    public synchronized void removeEndpoint(String serviceName, String instanceId) {
+    public synchronized void removeEndpoint(String serviceName, String instanceId, long registrationId) {
         RegisteredService service = serviceMap.get(serviceName);
         if (service == null) {
+            return;
+        }
+        RegisteredEndpoint current = service.getEndpoint(instanceId);
+        if (current == null || current.getRegistrationId() != registrationId) {
             return;
         }
         RegisteredEndpoint removed = service.removeEndpoint(instanceId);
@@ -165,13 +174,13 @@ public class RegistryStore {
         ));
     }
 
-    public synchronized void successEndpoint(String serviceName, String instanceId) {
+    public synchronized void successEndpoint(String serviceName, String instanceId, long registrationId) {
         RegisteredService service = serviceMap.get(serviceName);
         if (service == null) {
             return;
         }
         RegisteredEndpoint endpoint = service.getEndpoint(instanceId);
-        if (endpoint == null || "active".equals(endpoint.getStatus())) {
+        if (endpoint == null || endpoint.getRegistrationId() != registrationId || "active".equals(endpoint.getStatus())) {
             return;
         }
         endpoint.setStatus("active");

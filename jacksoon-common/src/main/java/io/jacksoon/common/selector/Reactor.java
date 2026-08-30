@@ -1,17 +1,22 @@
 package io.jacksoon.common.selector;
 
 
+import io.jacksoon.common.exception.ExceptionDispatcher;
+import io.jacksoon.common.handler.Handler;
+
 import java.io.IOException;
 import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Iterator;
 import java.util.Set;
-import io.jacksoon.common.handler.Handler;
-public class Reactor implements Runnable{
+
+public class Reactor implements Runnable {
     final Selector selector;
-    public Reactor(Selector selector){
+    private final ExceptionDispatcher exceptionDispatcher;
+    public Reactor(Selector selector, ExceptionDispatcher exceptionDispatcher) {
         this.selector = selector;
+        this.exceptionDispatcher = exceptionDispatcher;
     }
     public void register(SelectableChannel channel, Handler handler, int ops) throws IOException {
         channel.configureBlocking(false);
@@ -19,12 +24,13 @@ public class Reactor implements Runnable{
     }
     @Override
     public void run() {
-        try {
-            while (true) {
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
                 processOnce();
+            } catch (IOException e) {
+                dispatchException(e);
+                break;
             }
-        } catch (IOException ex) {
-            ex.printStackTrace();
         }
     }
     public void processOnce() throws IOException {
@@ -36,16 +42,35 @@ public class Reactor implements Runnable{
         while (iterator.hasNext()) {
             SelectionKey key = iterator.next();
             iterator.remove();
-
             if (!key.isValid()) {
                 continue;
             }
-
-            dispatch(key);
+            try {
+                dispatch(key);
+            } catch (Exception e) {
+                dispatchException(key, e);
+            }
         }
     }
-     void dispatch(SelectionKey selectionKey) {
+
+    void dispatch(SelectionKey selectionKey) {
         Handler handler = (Handler) selectionKey.attachment();
         handler.handle();
+    }
+
+    private <C> void dispatchException(C context, Throwable throwable) {
+        if (exceptionDispatcher == null) {
+            throwable.printStackTrace();
+            return;
+        }
+        exceptionDispatcher.dispatch(context, throwable);
+    }
+
+    private void dispatchException(Throwable throwable) {
+        if (exceptionDispatcher == null) {
+            throwable.printStackTrace();
+            return;
+        }
+        exceptionDispatcher.dispatch(throwable);
     }
 }

@@ -1,18 +1,19 @@
 package io.jacksoon.router.worker;
 
+import io.jacksoon.common.exception.ExceptionDispatcher;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.worker.Executor;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
-
-import java.io.IOException;
-import java.nio.channels.SelectionKey;
+import io.jacksoon.router.exception.context.RouterExceptionContext;
 
 public class RouterPipelineWorker implements Runnable {
-    Executor<RouterPipelineContext> executor;
-    CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue;
-    public RouterPipelineWorker(CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, Executor<RouterPipelineContext> executor) {
+    private final Executor<RouterPipelineContext> executor;
+    private final CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue;
+    private final ExceptionDispatcher exceptionDispatcher;
+    public RouterPipelineWorker(CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, Executor<RouterPipelineContext> executor, ExceptionDispatcher exceptionDispatcher) {
         this.routerPipelineQueue = routerPipelineQueue;
         this.executor = executor;
+        this.exceptionDispatcher = exceptionDispatcher;
     }
     @Override
     public void run() {
@@ -24,25 +25,9 @@ public class RouterPipelineWorker implements Runnable {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
-            } catch (RuntimeException e) {
-                e.printStackTrace();
-                if (context != null) {
-                    closeClient(context.getSelectionKey());
-                }
+            } catch (Exception e) {
+                exceptionDispatcher.dispatch(RouterExceptionContext.of(context), e);
             }
-        }
-    }
-    private void closeClient(SelectionKey selectionKey) {
-        if (selectionKey == null) {
-            return;
-        }
-        try {
-            selectionKey.cancel();
-        } catch (RuntimeException ignored) {
-        }
-        try {
-            selectionKey.channel().close();
-        } catch (IOException ignored) {
         }
     }
 }

@@ -3,6 +3,7 @@ package io.jacksoon.registry.pipeline.parse;
 import io.jacksoon.common.pipeline.context.HttpRequest;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.registry.pipeline.context.RegistryPipelineContext;
+import io.jacksoon.registry.exception.InvalidRegistryRequestException;
 import io.jacksoon.registry.pipeline.depth.RegistryDepth;
 
 import java.nio.ByteBuffer;
@@ -37,13 +38,13 @@ public class RegistryParse implements RegistryDepth {
         String[] lines = header.split("\r\n");
 
         if (lines.length == 0) {
-            throw new IllegalArgumentException("No request line");
+            throw new InvalidRegistryRequestException("No request line");
         }
 
         String[] requestLine = lines[0].trim().split(" ");
 
         if (requestLine.length < 3) {
-            throw new IllegalArgumentException("Invalid request line: " + lines[0]);
+            throw new InvalidRegistryRequestException("Invalid request line: " + lines[0]);
         }
 
         httpRequest.setMethod(requestLine[0]);

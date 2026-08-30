@@ -1,11 +1,15 @@
 package io.jacksoon.router.handler;
 
+import io.jacksoon.common.exception.ExceptionDispatcher;
 import io.jacksoon.common.handler.NioConnectionHandler;
 import io.jacksoon.common.util.BufferUtils;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.util.HttpResponseCheck;
 import io.jacksoon.common.util.ResponseCheckResult;
 import io.jacksoon.router.connection.BackendConnectionPool;
+import io.jacksoon.router.exception.BackendConnectionException;
+import io.jacksoon.router.exception.context.RouterExceptionContext;
+import io.jacksoon.router.pipeline.context.DetachedContexts;
 import io.jacksoon.router.pipeline.context.ProxyContext;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
 import io.jacksoon.router.pipeline.executor.router.ReRoutingContext;
@@ -25,13 +29,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class BackendIOHandler extends NioConnectionHandler {
+
     private static final long CONNECT_TIMEOUT_MILLIS = 5_000L;
     private static final long RESPONSE_TIMEOUT_MILLIS = 30_000L;
+
     private final CommonBlockingQueue<ProxyContext> requestQueue;
     private final CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue;
     private final CommonBlockingQueue<ServiceRequest> serviceRequestQueue;
     private final HttpResponseCheck responseCheck;
     private final CommonBlockingQueue<ReRoutingContext> reRoutingQueue;
+    private final ExceptionDispatcher exceptionDispatcher;
     @Setter
     private BackendConnectionPool connectionPool;
     private volatile ProxyContext currentWriteContext;
@@ -39,19 +46,21 @@ public class BackendIOHandler extends NioConnectionHandler {
     private final AtomicBoolean terminated = new AtomicBoolean(false);
     private final AtomicInteger pendingCount = new AtomicInteger();
     private final String serviceName;
+    private final ByteBuffer idleReadBuffer = ByteBuffer.allocate(1);
     private volatile long idleSince;
     private volatile long connectStartedAt;
     private volatile long requestStartedAt;
     private volatile boolean closed;
     private volatile boolean isReconnection;
 
-    public BackendIOHandler(String serviceName, Selector selector, SocketChannel socketChannel, CommonBlockingQueue<ProxyContext> requestQueue, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, HttpResponseCheck responseCheck, CommonBlockingQueue<ServiceRequest> serviceRequestQueue, CommonBlockingQueue<ReRoutingContext> reRoutingQueue) {
+    public BackendIOHandler(String serviceName, Selector selector, SocketChannel socketChannel, CommonBlockingQueue<ProxyContext> requestQueue, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, HttpResponseCheck responseCheck, CommonBlockingQueue<ServiceRequest> serviceRequestQueue, CommonBlockingQueue<ReRoutingContext> reRoutingQueue, ExceptionDispatcher exceptionDispatcher) {
         super(selector, socketChannel);
         this.requestQueue = requestQueue;
         this.routerPipelineQueue = routerPipelineQueue;
         this.responseCheck = responseCheck;
         this.serviceName = serviceName;
         this.reRoutingQueue = reRoutingQueue;
+        this.exceptionDispatcher = exceptionDispatcher;
         this.idleSince = System.currentTimeMillis();
         this.connectStartedAt = this.idleSince;
         this.serviceRequestQueue = serviceRequestQueue;
@@ -62,6 +71,7 @@ public class BackendIOHandler extends NioConnectionHandler {
     public void increasePending() {
         pendingCount.incrementAndGet();
     }
+
     public void decreasePending() {
         int next = pendingCount.updateAndGet(current -> Math.max(0, current - 1));
         if (next == 0) {
@@ -78,10 +88,7 @@ public class BackendIOHandler extends NioConnectionHandler {
     }
 
     public boolean removable(long now, long idleTimeoutMillis) {
-        return pendingCount.get() == 0
-                && currentWriteContext == null
-                && requestQueue.isEmpty()
-                && now - idleSince >= idleTimeoutMillis;
+        return pendingCount.get() == 0 && currentWriteContext == null && requestQueue.isEmpty() && now - idleSince >= idleTimeoutMillis;
     }
 
     public void checkTimeout(long now) {
@@ -133,8 +140,16 @@ public class BackendIOHandler extends NioConnectionHandler {
             if (selectionKey.isWritable()) {
                 write();
             }
-        } catch (IOException | RuntimeException e) {
-            failAndClose(e);
+        } catch (IOException e) {
+            failAndClose(new BackendConnectionException("Backend IO failed. serviceName=" + serviceName, e));
+        } catch (RuntimeException e) {
+            BackendConnectionException failure = e instanceof BackendConnectionException backendException
+                    ? backendException
+                    : new BackendConnectionException(
+                    "Backend handler failed. serviceName=" + serviceName,
+                    e
+            );
+            failAndClose(failure);
         }
     }
 
@@ -145,10 +160,10 @@ public class BackendIOHandler extends NioConnectionHandler {
         isReconnection = false;
         connectStartedAt = 0L;
         if (currentWriteContext != null || !requestQueue.isEmpty()) {
-            setInterestOps(SelectionKey.OP_WRITE);
-        } else {
-            setInterestOps(0);
+            setInterestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+            return;
         }
+        setInterestOps(SelectionKey.OP_READ);
     }
 
     private void write() throws IOException {
@@ -162,7 +177,7 @@ public class BackendIOHandler extends NioConnectionHandler {
             if (currentWriteContext == null) {
                 currentWriteContext = requestQueue.pollNow();
                 if (currentWriteContext == null) {
-                    setInterestOps(0);
+                    setInterestOps(SelectionKey.OP_READ);
                     return;
                 }
                 requestStartedAt = System.currentTimeMillis();
@@ -187,7 +202,7 @@ public class BackendIOHandler extends NioConnectionHandler {
         }
         ProxyContext proxyContext = currentWriteContext;
         if (proxyContext == null) {
-            setInterestOps(0);
+            readIdleConnection();
             return;
         }
         ByteBuffer readBuffer = proxyContext.readBuffer;
@@ -213,6 +228,18 @@ public class BackendIOHandler extends NioConnectionHandler {
         completeBackendResponse(proxyContext, result, false);
     }
 
+    private void readIdleConnection() throws IOException {
+        idleReadBuffer.clear();
+        int read = socketChannel.read(idleReadBuffer);
+        if (read == -1) {
+            failAndClose(new IOException("Backend closed idle connection. serviceName=" + serviceName));
+            return;
+        }
+        if (read > 0) {
+            failAndClose(new IOException("Unexpected backend data while idle. serviceName=" + serviceName));
+        }
+    }
+
     public boolean send(ProxyContext context) {
         synchronized (stateLock) {
             if (closed || selectionKey == null || !selectionKey.isValid()) {
@@ -222,11 +249,11 @@ public class BackendIOHandler extends NioConnectionHandler {
                 return false;
             }
             try {
-                requestQueue.put(context); // 상관없어 어차피 OP_WRITE해도 write에서 막힘 , OP_CONNECT은 어차피 커넥션이 중일테니까 상태바꿔도됨
+                requestQueue.put(context);
                 if (!socketChannel.isConnected()) {
                     setInterestOps(SelectionKey.OP_CONNECT);
                 } else if (currentWriteContext == null) {
-                    setInterestOps(SelectionKey.OP_WRITE);
+                    setInterestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
                 }
                 selector.wakeup();
                 return true;
@@ -240,14 +267,42 @@ public class BackendIOHandler extends NioConnectionHandler {
         ByteBuffer responseBuffer = proxyContext.responseBuffer;
         responseBuffer.flip();
         if (result.responseLength() > responseBuffer.limit()) {
-            throw new IllegalStateException("Invalid response length: " + result.responseLength());
+            throw new BackendConnectionException("Invalid backend response length: " + result.responseLength());
         }
         responseBuffer.limit(result.responseLength());
         if (result.connectionClose() && !result.closeDelimited()) {
             responseBuffer = removeConnectionHeader(responseBuffer);
         }
+        boolean reusable = !backendClosed
+                && !result.connectionClose()
+                && !result.closeDelimited();
+        boolean necessaryReconnection = result.connectionClose();
+        synchronized (stateLock) {
+            if (closed || currentWriteContext != proxyContext) {
+                return;
+            }
+            currentWriteContext = null;
+            requestStartedAt = 0L;
+            if (necessaryReconnection) {
+                isReconnection = true;
+                setInterestOps(0);
+            } else if (reusable) {
+                if (requestQueue.isEmpty()) {
+                    setInterestOps(SelectionKey.OP_READ);
+                } else {
+                    setInterestOps(SelectionKey.OP_READ | SelectionKey.OP_WRITE);
+                }
+            } else {
+                setInterestOps(0);
+            }
+        }
+        SocketChannel clientChannel = null;
+        if (proxyContext.clientKey != null
+                && proxyContext.clientKey.channel() instanceof SocketChannel channel) {
+            clientChannel = channel;
+        }
         RouterPipelineContext context = new RouterPipelineContext(
-                socketChannel,
+                clientChannel,
                 "backend-response",
                 responseBuffer,
                 responseBuffer.remaining(),
@@ -257,27 +312,6 @@ public class BackendIOHandler extends NioConnectionHandler {
         context.setCloseAfterWrite(result.closeDelimited());
         routerPipelineQueue.put(context);
         serviceRequestQueue.put(new ServiceRequest(serviceName, true));
-        boolean reusable = !backendClosed
-                && !result.connectionClose()
-                && !result.closeDelimited();
-        boolean necessaryReconnection = result.connectionClose();
-        synchronized (stateLock) {
-            currentWriteContext = null;
-            requestStartedAt = 0L;
-            if (necessaryReconnection) {
-                isReconnection = true;
-                setInterestOps(0);
-            } else if (reusable) {
-                if (requestQueue.isEmpty()) {
-                    setInterestOps(0);
-                } else {
-                    setInterestOps(SelectionKey.OP_WRITE);
-                }
-            } else {
-                setInterestOps(0);
-            }
-        }
-
         if (connectionPool != null) {
             connectionPool.complete(this);
         } else {
@@ -302,7 +336,7 @@ public class BackendIOHandler extends NioConnectionHandler {
             this.selectionKey = this.socketChannel.register(selector, SelectionKey.OP_CONNECT, this);
             selector.wakeup();
         } catch (IOException e) {
-            failAndClose(new IOException("Backend reconnection fail", e));
+            failAndClose(new BackendConnectionException("Backend reconnection failed. serviceName=" + serviceName, e));
         }
     }
 
@@ -314,21 +348,24 @@ public class BackendIOHandler extends NioConnectionHandler {
     public void closeByPool() {
         failAndClose(new IOException("Backend connection closed by pool"));
     }
+
     public int load() {
         return pendingCount.get();
     }
+
     private void failAndClose(Throwable cause) {
         if (!terminated.compareAndSet(false, true)) {
             return;
         }
-        List<ProxyContext> pendingContexts = detachAssignedContexts();
+        DetachedContexts detached = detachAssignedContexts();
         closeTransport();
-        for (ProxyContext pending : pendingContexts) {
+        failCurrent(detached.current(), cause);
+        for (ProxyContext pending : detached.pending()) {
             reRoutingRequest(pending);
         }
     }
 
-    private List<ProxyContext> detachAssignedContexts() {
+    private DetachedContexts detachAssignedContexts() {
         List<ProxyContext> failedContexts = new ArrayList<>();
         ProxyContext current;
         synchronized (stateLock) {
@@ -340,10 +377,7 @@ public class BackendIOHandler extends NioConnectionHandler {
             drainRequestQueue(failedContexts);
             pendingCount.set(0);
         }
-        if (current != null) {
-            failCurrent(current);
-        }
-        return failedContexts;
+        return new DetachedContexts(current, failedContexts);
     }
 
     private void drainRequestQueue(List<ProxyContext> contexts) {
@@ -363,8 +397,19 @@ public class BackendIOHandler extends NioConnectionHandler {
         reRoutingQueue.put(new ReRoutingContext(context, serviceName));
     }
 
-    private void failCurrent(ProxyContext context) {
+    private void failCurrent(ProxyContext context, Throwable cause) {
+        if (context == null) {
+            return;
+        }
         serviceRequestQueue.put(new ServiceRequest(serviceName, false));
+
+        BackendConnectionException failure = cause instanceof BackendConnectionException backendException
+                ? backendException
+                : new BackendConnectionException(
+                "Backend request failed. serviceName=" + serviceName,
+                cause
+        );
+        exceptionDispatcher.dispatch(RouterExceptionContext.of(context), failure);
     }
 
     private void closeTransport() {

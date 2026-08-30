@@ -2,6 +2,8 @@ package io.jacksoon.filterManagement.pipeline.util;
 
 import io.jacksoon.common.filter.*;
 import io.jacksoon.common.pipeline.context.HttpRequest;
+import io.jacksoon.filterManagement.exception.FilterSystemException;
+import io.jacksoon.filterManagement.exception.InvalidFilterRequestException;
 import io.jacksoon.filterManagement.pipeline.context.FilterPipelineContext;
 import io.jacksoon.init.annotation.Init;
 
@@ -17,7 +19,7 @@ public class FilterRequestParser {
         HttpRequest request = context.getRequest();
         byte[] fileBytes = request.getBody();
         if (fileBytes == null || fileBytes.length == 0) {
-            throw new IllegalArgumentException("Filter file body is empty");
+            throw new InvalidFilterRequestException("Filter file body is empty");
         }
         validateFileHash(fileBytes, requireHeader(request, "Filter-File-Hash"));
         FilterConfigDto config = new FilterConfigDto(
@@ -36,12 +38,12 @@ public class FilterRequestParser {
 
     private void validateFileHash(byte[] fileBytes, String expectedHash) {
         if (!expectedHash.matches("(?i)[0-9a-f]{64}")) {
-            throw new IllegalArgumentException("Invalid Filter-File-Hash header");
+            throw new InvalidFilterRequestException("Invalid Filter-File-Hash header");
         }
 
         String actualHash = calculateSha256(fileBytes);
         if (!actualHash.equalsIgnoreCase(expectedHash)) {
-            throw new IllegalArgumentException("Filter file hash mismatch");
+            throw new InvalidFilterRequestException("Filter file hash mismatch");
         }
     }
 
@@ -50,7 +52,7 @@ public class FilterRequestParser {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(digest.digest(bytes));
         } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 algorithm is unavailable", exception);
+            throw new FilterSystemException("SHA-256 algorithm is unavailable", exception);
         }
     }
 
@@ -58,7 +60,7 @@ public class FilterRequestParser {
         try {
             return Enum.valueOf(enumType, value.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("Invalid " + headerName + " value: " + value, e);
         }
     }
 
@@ -66,14 +68,14 @@ public class FilterRequestParser {
         try {
             return Integer.parseInt(value.trim());
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("Invalid Filter-Order: " + value, e);
         }
     }
 
     private String requireHeader(HttpRequest request, String headerName) {
         String value = getHeader(request, headerName);
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("Required header is missing: " + headerName);
         }
         return value.trim();
     }

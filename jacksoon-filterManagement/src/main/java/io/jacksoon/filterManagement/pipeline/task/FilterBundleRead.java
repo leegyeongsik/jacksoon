@@ -1,8 +1,8 @@
 package io.jacksoon.filterManagement.pipeline.task;
 
+import io.jacksoon.filterManagement.exception.FilterBundleException;
 import io.jacksoon.filterManagement.pipeline.context.FilterPipelineContext;
 import io.jacksoon.filterManagement.pipeline.depth.FilterDepth;
-import io.jacksoon.filterManagement.pipeline.util.Jar;
 import io.jacksoon.filterManagement.store.FilterStore;
 import io.jacksoon.init.annotation.Init;
 
@@ -36,7 +36,7 @@ public class FilterBundleRead implements FilterDepth {
             context.getResponse().addHeader("Content-Type", "application/java-archive");
             context.setEvent("write");
         } catch (IOException e) {
-            throw new IllegalStateException();
+            throw new FilterBundleException("Failed to read filter bundle. path=" + bundlePath, e);
         }
     }
 

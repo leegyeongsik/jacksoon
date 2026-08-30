@@ -3,6 +3,7 @@ package io.jacksoon.router.pipeline.executor.paser;
 import io.jacksoon.common.pipeline.context.HttpRequest;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
+import io.jacksoon.router.exception.InvalidRequestException;
 import io.jacksoon.router.pipeline.executor.depth.RouterDepth;
 
 import java.nio.ByteBuffer;
@@ -35,13 +36,13 @@ public class HttpParse implements RouterDepth {
         String[] lines = header.split("\r\n");
 
         if (lines.length == 0) {
-            throw new IllegalArgumentException();
+            throw new InvalidRequestException("Invalid HTTP request line");
         }
 
         String[] requestLine = lines[0].trim().split(" ");
 
         if (requestLine.length < 3) {
-            throw new IllegalArgumentException();
+            throw new InvalidRequestException("HTTP request line must contain method, path and version");
         }
 
         httpRequest.setMethod(requestLine[0]);

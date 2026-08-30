@@ -1,6 +1,7 @@
 package io.jacksoon.filterManagement.config;
 
 
+import io.jacksoon.common.exception.ExceptionDispatcher;
 import io.jacksoon.common.handler.AcceptHandler;
 import io.jacksoon.common.handler.Handler;
 import io.jacksoon.common.handler.IOStore;
@@ -33,8 +34,8 @@ public class ReactorConfig {
     }
 
     @Init("FilterReactor")
-    public Reactor filterReactor(@Init("FilterSelector") Selector selector, @Init("FilterServerSocket") ServerSocketChannel serverSocketChannel, @Init("FilterAcceptHandler") Handler handler) throws Exception {
-        Reactor reactor = new Reactor(selector);
+    public Reactor filterReactor(@Init("FilterSelector") Selector selector, @Init("FilterServerSocket") ServerSocketChannel serverSocketChannel, @Init("FilterAcceptHandler") Handler handler, ExceptionDispatcher exceptionDispatcher) throws Exception {
+        Reactor reactor = new Reactor(selector, exceptionDispatcher);
         serverSocketChannel.socket().bind(new InetSocketAddress(1011));
         reactor.register(serverSocketChannel, handler, SelectionKey.OP_ACCEPT);
         return reactor;

@@ -25,12 +25,4 @@ public class RegistryCheckManager {
         poolManager.sync(snapshot);
         routerRegistryStore.save(snapshot);
     }
-
-    public void refreshSafely() {
-        try {
-            refresh();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
 }

@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Setter
 public class RegistryPipelineContext extends PipelineContext {
     private RegistryRegisterRequest registerRequest;
+    private long registrationId;
 
     public RegistryPipelineContext(SocketChannel socketChannel, String event, ByteBuffer byteBuffer, int byteBufferIndex, SelectionKey selectionKey, AtomicInteger current) {
         super(socketChannel, event, byteBuffer, byteBufferIndex, selectionKey, current);

@@ -6,6 +6,7 @@ import io.jacksoon.common.util.RequestCheckResult;
 import io.jacksoon.common.util.ResponseContext;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
@@ -61,8 +62,12 @@ public class IOHandler implements Handler {
             if (selectionKey.isWritable()) {
                 write();
             }
-        } catch (IOException | CancelledKeyException ex) {
+        } catch (IOException ex) {
             close();
+            throw new UncheckedIOException("Client IO handling failed", ex);
+        } catch (CancelledKeyException ex) {
+            close();
+            throw ex;
         }
     }
 
@@ -150,7 +155,7 @@ public class IOHandler implements Handler {
         }
     }
 
-    void close() {
+    public void close() {
         if (!closed.compareAndSet(false, true)) {
             return;
         }

@@ -5,11 +5,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class ConnectionHandlerRegistry<T extends AutoCloseable> {
-    private final Map<String, T> handlerMap = new ConcurrentHashMap<>(); // 그러면 저거를 집어넣으면되지
-    // 일단 그러면 이거를 수정하면 service안에 맵이 있는식으로 인스턴스로다가
+    private final Map<String, T> handlerMap = new ConcurrentHashMap<>();
 
-    public void put(String key, T handler) {
-        handlerMap.put(key, handler);
+    public T put(String key, T handler) {
+        return handlerMap.put(key, handler);
     }
 
     public T get(String key) {
@@ -20,8 +19,11 @@ public class ConnectionHandlerRegistry<T extends AutoCloseable> {
         return handlerMap.remove(key);
     }
 
+    public boolean remove(String key, T handler) {
+        return handlerMap.remove(key, handler);
+    }
+
     public Collection<T> handlers() {
         return handlerMap.values();
     }
-
 }

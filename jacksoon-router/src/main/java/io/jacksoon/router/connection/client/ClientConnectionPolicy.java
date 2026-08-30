@@ -1,5 +1,6 @@
 package io.jacksoon.router.connection.client;
 
+import io.jacksoon.router.exception.RouterConfigurationException;
 public record ClientConnectionPolicy(
         long coldCheckIntervalMillis,
         long warmCheckIntervalMillis,
@@ -12,13 +13,13 @@ public record ClientConnectionPolicy(
 ) {
     public ClientConnectionPolicy {
         if (coldCheckIntervalMillis <= 0 || warmCheckIntervalMillis <= 0 || hotCheckIntervalMillis <= 0) {
-            throw new IllegalArgumentException("check interval must be greater than zero");
+            throw new RouterConfigurationException("check interval must be greater than zero");
         }
         if (idleTimeoutMillis <= 0) {
-            throw new IllegalArgumentException("idle timeout must be greater than zero");
+            throw new RouterConfigurationException("idle timeout must be greater than zero");
         }
         if (coldToWarmMinRequestPerSecond < 0 || warmToHotMinRequestPerSecond < 0 || warmToColdMaxRequestPerSecond < 0 || hotToWarmMaxRequestPerSecond < 0) {
-            throw new IllegalArgumentException("request rate threshold must not be negative");
+            throw new RouterConfigurationException("request rate threshold must not be negative");
         }
     }
 
@@ -27,7 +28,7 @@ public record ClientConnectionPolicy(
             case COLD -> coldCheckIntervalMillis;
             case WARM -> warmCheckIntervalMillis;
             case HOT -> hotCheckIntervalMillis;
-            case CLOSE -> throw new IllegalArgumentException("CLOSE tier does not use monitor interval");
+            case CLOSE -> throw new RouterConfigurationException("CLOSE tier does not use monitor interval");
         };
     }
 }

@@ -3,6 +3,8 @@ package io.jacksoon.router.connection;
 import io.jacksoon.common.registry.dto.response.EndpointSnapshot;
 import io.jacksoon.router.connection.factory.BackendConnectionFactory;
 import io.jacksoon.router.handler.BackendIOHandler;
+import io.jacksoon.router.exception.BackendConnectionException;
+import io.jacksoon.router.exception.BackendUnavailableException;
 import io.jacksoon.router.pipeline.context.ProxyContext;
 import lombok.Getter;
 
@@ -43,7 +45,7 @@ public class BackendConnectionPool {
     }
     public synchronized void send(ProxyContext context) {
         if (closed) {
-            throw new IllegalStateException("Backend connection pool is closed");
+            throw new BackendUnavailableException(serviceName, "Backend connection pool is closed. serviceName=" + serviceName);
         }
         int attempts = 0;
         while (attempts++ < maxConnection) {
@@ -53,7 +55,7 @@ public class BackendConnectionPool {
             growIfNeeded();
             Node node = head;
             if (node == null) {
-                throw new IllegalStateException("No backend connection");
+                throw new BackendUnavailableException(serviceName, "No backend connection. serviceName=" + serviceName);
             }
             detach(node);
             BackendIOHandler handler = node.handler;
@@ -70,7 +72,7 @@ public class BackendConnectionPool {
             }
             rollbackRejected(handler);
         }
-        throw new IllegalStateException("Failed to send request to backend connection");
+        throw new BackendConnectionException("Failed to send request to backend connection. serviceName=" + serviceName);
     }
     public synchronized void complete(BackendIOHandler handler) {
         Node node = nodeMap.get(handler);

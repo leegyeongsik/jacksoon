@@ -1,6 +1,7 @@
 package io.jacksoon.common.handler;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
@@ -18,7 +19,7 @@ public abstract class NioConnectionHandler implements Handler, AutoCloseable {
             this.selectionKey = socketChannel.register(selector, 0, this);
         } catch (IOException e) {
             closeSocketOnly();
-            throw new RuntimeException(e);
+            throw new UncheckedIOException("Failed to initialize NIO connection handler", e);
         }
     }
     protected void setInterestOps(int ops) {

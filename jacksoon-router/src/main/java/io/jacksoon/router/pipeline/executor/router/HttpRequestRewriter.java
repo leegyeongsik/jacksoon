@@ -1,6 +1,7 @@
 package io.jacksoon.router.pipeline.executor.router;
 
 import io.jacksoon.init.annotation.Init;
+import io.jacksoon.router.exception.InvalidRequestException;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -20,7 +21,7 @@ public class HttpRequestRewriter {
         int requestLineEnd = findRequestLineEnd(bytes, requestLength);
 
         if (requestLineEnd == -1) {
-            throw new IllegalArgumentException("Invalid HTTP request. request line end not found");
+            throw new InvalidRequestException("Invalid HTTP request. request line end not found");
         }
 
         String newRequestLine = method + " " + backendPath + " " + version + "\r\n";

@@ -2,6 +2,7 @@ package io.jacksoon.router.filter;
 
 import io.jacksoon.common.worker.Executor;
 import io.jacksoon.init.annotation.Init;
+import io.jacksoon.router.exception.RouterFilterException;
 
 @Init
 public class FilterExecutor implements Executor<FilterRequestSetting> {
@@ -26,7 +27,7 @@ public class FilterExecutor implements Executor<FilterRequestSetting> {
 
         long loadedVersion = filterLoad.loadAndReplace(setting.bundleUri().toString());
         if (loadedVersion != remoteVersion) {
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Loaded filter version does not match remote version. remote=" + remoteVersion + ", loaded=" + loadedVersion);
         }
         setting.updateVersion(loadedVersion);
     }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.common.registry.dto.response.RegistrySnapshot;
 import io.jacksoon.common.registry.dto.response.RegistryVersionResponse;
 import io.jacksoon.init.annotation.Init;
+import io.jacksoon.router.exception.RouterRegistryException;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -41,7 +42,7 @@ public class RegistryClient {
             );
 
             if (response.statusCode() != 200) {
-                throw new IllegalStateException(
+                throw new RouterRegistryException(
                         "Registry request failed. url=" + url + ", status=" + response.statusCode()
                 );
             }
@@ -49,9 +50,12 @@ public class RegistryClient {
             return objectMapper.readValue(response.body(), responseType);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while requesting registry", e);
+            throw new RouterRegistryException("Interrupted while requesting registry", e);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to request registry. url=" + url, e);
+            if (e instanceof RouterRegistryException routerRegistryException) {
+                throw routerRegistryException;
+            }
+            throw new RouterRegistryException("Failed to request registry. url=" + url, e);
         }
     }
 }

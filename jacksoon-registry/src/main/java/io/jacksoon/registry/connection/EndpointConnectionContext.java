@@ -11,15 +11,17 @@ public class EndpointConnectionContext extends ConnectionContext {
     private final int port;
     private final String protocol;
     private final String healthPath;
+    private final long registrationId;
 
-    public EndpointConnectionContext(String serviceName, String instanceId, String host, int port, String protocol, String healthPath) {
-        super(host,port);
+    public EndpointConnectionContext(String serviceName, String instanceId, String host, int port, String protocol, String healthPath, long registrationId) {
+        super(host, port);
         this.serviceName = serviceName;
         this.instanceId = instanceId;
         this.host = host;
         this.port = port;
         this.protocol = protocol;
         this.healthPath = healthPath;
+        this.registrationId = registrationId;
     }
 
     public String key() {

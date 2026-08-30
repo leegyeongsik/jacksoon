@@ -2,6 +2,7 @@ package io.jacksoon.filterManagement.pipeline.parse;
 
 import io.jacksoon.common.filter.FilterUploadRequest;
 import io.jacksoon.common.pipeline.context.HttpRequest;
+import io.jacksoon.filterManagement.exception.InvalidFilterRequestException;
 import io.jacksoon.filterManagement.pipeline.context.FilterPipelineContext;
 import io.jacksoon.filterManagement.pipeline.depth.FilterDepth;
 import io.jacksoon.filterManagement.pipeline.util.FilterRequestParser;
@@ -63,12 +64,12 @@ public class FilterParse implements FilterDepth {
 
         String[] lines = new String(headerBytes, StandardCharsets.UTF_8).split("\\r\\n");
         if (lines.length == 0) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("HTTP request line is missing");
         }
 
         String[] requestLine = lines[0].trim().split(" ");
         if (requestLine.length < 3) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("Invalid HTTP request line: " + lines[0]);
         }
 
         request.setMethod(requestLine[0].toUpperCase());

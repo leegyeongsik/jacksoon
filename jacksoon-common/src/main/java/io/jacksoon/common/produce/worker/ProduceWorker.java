@@ -1,5 +1,6 @@
 package io.jacksoon.common.produce.worker;
 
+import io.jacksoon.common.exception.ExceptionDispatcher;
 import io.jacksoon.common.produce.dto.ProduceDto;
 import io.jacksoon.common.util.CommonBlockingQueue;
 
@@ -11,9 +12,11 @@ public class ProduceWorker<T extends ProduceDto> implements Runnable { // 생각
     protected final List<T> buffer = new ArrayList<>(); // 그리고 주입받는다고 하더라도 t랑 상관없지 인터페이스를 걸어놔서 주입받게 하더라도 인터페이스에 연관된거 다 갖과어서 체크해서 주입하니까
     protected final CommonBlockingQueue<T> queue;
     protected final ProduceStore<T> produceStore;
-    public ProduceWorker(CommonBlockingQueue<T> queue, ProduceStore<T> produceStore) {
+    private final ExceptionDispatcher exceptionDispatcher;
+    public ProduceWorker(CommonBlockingQueue<T> queue, ProduceStore<T> produceStore, ExceptionDispatcher exceptionDispatcher) {
         this.queue = queue;
         this.produceStore = produceStore;
+        this.exceptionDispatcher = exceptionDispatcher;
     }
 
     @Override
@@ -31,6 +34,7 @@ public class ProduceWorker<T extends ProduceDto> implements Runnable { // 생각
                         flush();
                     }
                 } catch (Exception e) {
+                    dispatchException(e);
                     // 여기서 파일로 저장해놓는다던지 그런식으로 처리해야할듯
                 }
             }
@@ -38,6 +42,7 @@ public class ProduceWorker<T extends ProduceDto> implements Runnable { // 생각
             try {
                 flush();
             } catch (Exception e) {
+                dispatchException(e);
                 // 여기서 파일로 저장해놓는다던지 그런식으로 처리해야할듯 얘도
                 buffer.clear();
             }
@@ -54,5 +59,12 @@ public class ProduceWorker<T extends ProduceDto> implements Runnable { // 생각
     }
     public void saveAll(List<T> batch) {
         produceStore.saveAll(batch);
+    }
+    private void dispatchException(Throwable throwable) {
+        if (exceptionDispatcher == null) {
+            throwable.printStackTrace();
+            return;
+        }
+        exceptionDispatcher.dispatch(throwable);
     }
 }
