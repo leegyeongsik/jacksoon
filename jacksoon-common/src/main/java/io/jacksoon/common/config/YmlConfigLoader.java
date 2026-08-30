@@ -12,8 +12,7 @@ public class YmlConfigLoader {
 
     private static final String CONFIG_PROPERTY = "jacksoon.config";
 
-    private final ObjectMapper objectMapper =
-            new ObjectMapper(new YAMLFactory());
+    private final ObjectMapper objectMapper = new ObjectMapper(new YAMLFactory());
 
     public <T> T load(String resource, Class<T> type) {
         String externalConfig = System.getProperty(CONFIG_PROPERTY);
