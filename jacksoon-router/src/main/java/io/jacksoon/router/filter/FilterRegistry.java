@@ -6,9 +6,9 @@ import io.jacksoon.common.filter.FilterTiming;
 import io.jacksoon.common.filter.PipelineType;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.init.annotation.Init;
+import io.jacksoon.router.exception.RouterFilterExecutionException;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
 import io.jacksoon.router.produce.dto.ServiceRequest;
-import lombok.Getter;
 
 import java.io.IOException;
 import java.net.URLClassLoader;
@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-@Getter
 @Init
 public class FilterRegistry {
     private final CommonBlockingQueue<ServiceRequest> filterMetricQueue;
@@ -46,7 +45,7 @@ public class FilterRegistry {
                 filterMetricQueue.put(new ServiceRequest(filter.config().filterName(), true));
             } catch (Exception e) {
                 filterMetricQueue.put(new ServiceRequest(filter.config().filterName(), false));
-                e.printStackTrace();
+                throw new RouterFilterExecutionException("Filter execution failed. filter=" + filter.config().filterName(), e);
             }
         }
     }

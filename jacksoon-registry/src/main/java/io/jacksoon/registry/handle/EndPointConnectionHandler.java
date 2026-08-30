@@ -6,6 +6,7 @@ import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.registry.connection.EndpointConnection;
 import io.jacksoon.registry.connection.event.EndPointConnectionEvent;
 import io.jacksoon.registry.connection.event.EndPointEvent;
+import io.jacksoon.registry.exception.RegistryConnectionException;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -20,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class EndPointConnectionHandler extends NioConnectionHandler {
 
+    private static final long CONNECT_TIMEOUT_MILLIS = 5_000L;
     private static final long HEALTH_CHECK_TIMEOUT_MILLIS = 5_000L;
 
     private final EndpointConnection connection;
@@ -29,12 +31,24 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
     private final AtomicBoolean successEventPublished = new AtomicBoolean(false);
     private final AtomicBoolean terminated = new AtomicBoolean(false);
     private volatile long healthCheckStartedAt;
+    private volatile long connectStartedAt;
 
     public EndPointConnectionHandler(Selector selector, SocketChannel socketChannel, EndpointConnection connection, ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry, CommonBlockingQueue<EndPointEvent> endpointEventQueue) {
         super(selector, socketChannel);
         this.connection = connection;
         this.endpointConnectionRegistry = endpointConnectionRegistry;
         this.endpointEventQueue = endpointEventQueue;
+    }
+
+    public void start() {
+        if (terminated.get()) {
+            return;
+        }
+        if (socketChannel.isConnected()) {
+            connected();
+            return;
+        }
+        connectStartedAt = System.currentTimeMillis();
         setInterestOps(SelectionKey.OP_CONNECT);
     }
 
@@ -62,7 +76,9 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
             if (!terminated.get()) {
                 fail("selection key cancelled: " + e.getMessage());
             }
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException e) {
+            fail(e.getClass().getSimpleName() + ": " + e.getMessage());
+        } catch (RuntimeException e) {
             fail(e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
@@ -71,9 +87,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         if (!socketChannel.finishConnect()) {
             return;
         }
-        connection.setConnected(true);
-        setInterestOps(0);
-        endpointEventQueue.put(new EndPointConnectionEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "connection", this));
+        connected();
     }
 
     private void writeHealthCheck() throws IOException {
@@ -132,17 +146,23 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
     }
 
     private void reconnection() {
-        close();
+        super.close();
         try {
             this.socketChannel = SocketChannel.open();
             this.socketChannel.configureBlocking(false);
-            this.socketChannel.connect(new InetSocketAddress(connection.getHost(), connection.getPort()));
-            this.selectionKey = this.socketChannel.register(selector, SelectionKey.OP_CONNECT, this);
+            boolean connected = this.socketChannel.connect(new InetSocketAddress(connection.getHost(), connection.getPort()));
+            this.selectionKey = this.socketChannel.register(selector, 0, this);
+            if (connected) {
+                connected();
+            } else {
+                connectStartedAt = System.currentTimeMillis();
+                connection.setConnected(false);
+                setInterestOps(SelectionKey.OP_CONNECT);
+            }
+            selector.wakeup();
         } catch (IOException e) {
-            fail("reconnection fail");
-            return;
+            fail("Endpoint reconnection failed: " + e.getMessage());
         }
-        healthCheckInProgress.set(false);
     }
 
     private boolean isConnectionAlive(String response) {
@@ -154,16 +174,27 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         setInterestOps(0);
         healthCheckStartedAt = 0L;
         if (successEventPublished.compareAndSet(false, true)) {
-            endpointEventQueue.put(new EndPointEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "success"));
+            endpointEventQueue.put(new EndPointEvent(
+                    connection.getKey(),
+                    connection.getServiceName(),
+                    connection.getInstanceId(),
+                    "success",
+                    connection.getRegistrationId(),
+                    this
+            ));
         }
     }
 
     public void fireHealthCheckEvent() {
-        if (terminated.get()
-                || !connection.isConnected()
-                || !socketChannel.isOpen()
-                || !socketChannel.isConnected()
-                || !selectionKey.isValid()) {
+        if (terminated.get()) {
+            return;
+        }
+        if (!connection.isConnected()) {
+            checkConnectTimeout();
+            return;
+        }
+        if (!socketChannel.isOpen() || !socketChannel.isConnected() || !selectionKey.isValid()) {
+            fail("connected endpoint transport is invalid");
             return;
         }
         if (!healthCheckInProgress.compareAndSet(false, true)) {
@@ -181,6 +212,25 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
             setInterestOps(SelectionKey.OP_WRITE);
         } catch (RuntimeException e) {
             fail("failed to prepare health check: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+    }
+
+    private void connected() {
+        connectStartedAt = 0L;
+        connection.setConnected(true);
+        setInterestOps(0);
+
+        endpointEventQueue.put(new EndPointConnectionEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "connection", connection.getRegistrationId(), this));
+    }
+
+    private void checkConnectTimeout() {
+        long startedAt = connectStartedAt;
+        if (startedAt <= 0L) {
+            return;
+        }
+        long elapsed = System.currentTimeMillis() - startedAt;
+        if (elapsed >= CONNECT_TIMEOUT_MILLIS) {
+            fail("endpoint connect timeout: elapsed=" + elapsed + "ms");
         }
     }
 
@@ -234,21 +284,16 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
                 sizeLine = sizeLine.substring(0, extensionIndex).trim();
             }
             if (sizeLine.isEmpty()) {
-                throw new IllegalStateException("Invalid empty chunk-size line");
+                throw new RegistryConnectionException("Invalid empty chunk-size line");
             }
             final long chunkSize;
             try {
                 chunkSize = Long.parseLong(sizeLine, 16);
             } catch (NumberFormatException e) {
-                throw new IllegalStateException(
-                        "Invalid chunk size: " + sizeLine,
-                        e
-                );
+                throw new RegistryConnectionException("Invalid chunk size: " + sizeLine, e);
             }
             if (chunkSize < 0 || chunkSize > Integer.MAX_VALUE) {
-                throw new IllegalStateException(
-                        "Unsupported chunk size: " + chunkSize
-                );
+                throw new RegistryConnectionException("Unsupported chunk size: " + chunkSize);
             }
             int chunkDataStart = sizeLineEnd + 2;
             if (chunkSize == 0) {
@@ -260,7 +305,7 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
             }
             int chunkDataEnd = (int) chunkDataEndLong;
             if (bytes[chunkDataEnd] != '\r' || bytes[chunkDataEnd + 1] != '\n') {
-                throw new IllegalStateException("Invalid chunk terminator");
+                throw new RegistryConnectionException("Invalid chunk terminator");
             }
             cursor = chunkDataEnd + 2;
         }
@@ -288,13 +333,11 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         try {
             int contentLength = Integer.parseInt(value);
             if (contentLength < 0) {
-                throw new IllegalStateException(
-                        "Negative Content-Length: " + value
-                );
+                throw new RegistryConnectionException("Negative Content-Length: " + value);
             }
             return contentLength;
         } catch (NumberFormatException e) {
-            throw new IllegalStateException("Invalid Content-Length: " + value, e);
+            throw new RegistryConnectionException("Invalid Content-Length: " + value, e);
         }
     }
 
@@ -391,15 +434,29 @@ public class EndPointConnectionHandler extends NioConnectionHandler {
         return "<none>";
     }
 
+    public void closeByReplacement() {
+        if (!terminated.compareAndSet(false, true)) {
+            return;
+        }
+        connectStartedAt = 0L;
+        healthCheckStartedAt = 0L;
+        healthCheckInProgress.set(false);
+        connection.setConnected(false);
+        super.close();
+        endpointConnectionRegistry.remove(connection.getKey(), this);
+    }
+
     private void fail(String reason) {
         if (!terminated.compareAndSet(false, true)) {
             return;
         }
+        connectStartedAt = 0L;
         healthCheckStartedAt = 0L;
         healthCheckInProgress.set(false);
         connection.setConnected(false);
-        close();
-        endpointConnectionRegistry.remove(connection.getKey());
-        endpointEventQueue.put(new EndPointEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "fail"));
+        super.close();
+        endpointConnectionRegistry.remove(connection.getKey(), this);
+        endpointEventQueue.put(new EndPointEvent(connection.getKey(), connection.getServiceName(), connection.getInstanceId(), "fail", connection.getRegistrationId(), this));
     }
+
 }

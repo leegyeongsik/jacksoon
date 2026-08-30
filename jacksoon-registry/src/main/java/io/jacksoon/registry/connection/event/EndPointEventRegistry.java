@@ -1,5 +1,6 @@
 package io.jacksoon.registry.connection.event;
 
+import io.jacksoon.registry.exception.RegistryEventException;
 import io.jacksoon.common.worker.Executor;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.registry.connection.event.util.EndPointEventExecutorWarrap;
@@ -22,7 +23,7 @@ public class EndPointEventRegistry {
         Executor<EndPointEvent> executor = eventExecutorMap.get(endPointEvent.getReason());
 
         if (executor == null) {
-            throw new IllegalArgumentException("Unknown endpoint event: " + endPointEvent.getReason());
+            throw new RegistryEventException("Unknown endpoint event: " + endPointEvent.getReason());
         }
         executor.execute(endPointEvent);
     }

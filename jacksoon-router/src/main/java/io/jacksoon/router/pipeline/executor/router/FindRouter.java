@@ -6,6 +6,8 @@ import io.jacksoon.router.connection.BackendConnectionPoolManager;
 import io.jacksoon.router.connection.BackendServicePoolGroup;
 import io.jacksoon.router.connection.store.ResolvedRoute;
 import io.jacksoon.router.connection.store.RouterRegistryStore;
+import io.jacksoon.router.exception.BackendUnavailableException;
+import io.jacksoon.router.exception.RouteNotFoundException;
 
 @Init
 public class FindRouter {
@@ -21,14 +23,14 @@ public class FindRouter {
         String path = httpRequest.getPath();
         ResolvedRoute route = routerRegistryStore.resolve(path);
         if (route == null) {
-            throw new IllegalStateException("No route matched. path=" + path);
+            throw new RouteNotFoundException(path);
         }
         return new RoutingTarget(getServiceGroup(route.serviceName()), route.backendPath());
     }
     public BackendServicePoolGroup getServiceGroup(String serviceName){
         BackendServicePoolGroup group = backendConnectionPoolManager.select(serviceName);
         if (group == null) {
-            throw new IllegalStateException("No backend group. serviceName=" + serviceName);
+            throw new BackendUnavailableException(serviceName, "No backend group. serviceName=" + serviceName);
         }
         return group;
     }

@@ -35,7 +35,8 @@ public class RegistryInitializer {
                         endpoint.getHost(),
                         endpoint.getPort(),
                         endpoint.getProtocol(),
-                        endpoint.getHealthPath()
+                        endpoint.getHealthPath(),
+                        0L
                 ));
             }
         }

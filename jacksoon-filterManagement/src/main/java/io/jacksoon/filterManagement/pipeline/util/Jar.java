@@ -3,6 +3,9 @@ package io.jacksoon.filterManagement.pipeline.util;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.common.filter.FilterBundleMetadata;
 import io.jacksoon.common.filter.FilterConfigDto;
+import io.jacksoon.filterManagement.exception.FilterBundleException;
+import io.jacksoon.filterManagement.exception.FilterCompileException;
+import io.jacksoon.filterManagement.exception.InvalidFilterRequestException;
 import io.jacksoon.filterManagement.store.FilterDefinition;
 import io.jacksoon.init.annotation.Init;
 
@@ -14,6 +17,7 @@ import java.util.*;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
+import java.util.zip.ZipException;
 import java.util.stream.Stream;
 
 @Init
@@ -41,7 +45,7 @@ public class Jar {
         Path jarDirectory = jarPath.getParent();
         Path tempJarPath = jarDirectory.resolve(config.filterName() + ".jar.tmp");
         if (!Files.isDirectory(classRoot)) {
-            throw new IllegalStateException();
+            throw new FilterCompileException("Compiled class directory does not exist. path=" + classRoot);
         }
         try {
             Files.createDirectories(jarDirectory);
@@ -51,14 +55,14 @@ public class Jar {
             return jarPath;
         } catch (IOException e) {
             deleteQuietly(tempJarPath);
-            throw new IllegalStateException();
+            throw new FilterBundleException("Failed to create filter jar. path=" + jarPath, e);
         }
     }
 
     public Path saveUploadedJar(byte[] jarBytes, FilterConfigDto config, long version) {
         validateFilter(config, version);
         if (jarBytes == null || jarBytes.length == 0) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("Uploaded filter jar is empty");
         }
 
         Path jarPath = resolveJarPath(config, version);
@@ -73,9 +77,12 @@ public class Jar {
             }
             moveAtomically(tempJarPath, jarPath);
             return jarPath;
+        } catch (ZipException e) {
+            deleteQuietly(tempJarPath);
+            throw new InvalidFilterRequestException("Uploaded filter jar is invalid", e);
         } catch (IOException e) {
             deleteQuietly(tempJarPath);
-            throw new IllegalStateException();
+            throw new FilterBundleException("Failed to store uploaded filter jar. path=" + jarPath, e);
         }
     }
 
@@ -83,7 +90,7 @@ public class Jar {
         validateFilter(config, version);
         Path jarPath = resolveJarPath(config, version);
         if (!Files.isRegularFile(jarPath)) {
-            throw new IllegalStateException();
+            throw new FilterBundleException("Filter jar does not exist. path=" + jarPath);
         }
         return jarPath;
     }
@@ -101,7 +108,7 @@ public class Jar {
             return bundlePath;
         } catch (IOException e) {
             deleteQuietly(tempBundlePath);
-            throw new IllegalStateException();
+            throw new FilterBundleException("Failed to create filter bundle. path=" + bundlePath, e);
         }
     }
 
@@ -121,7 +128,7 @@ public class Jar {
                     )
                     .toList();
             if (files.isEmpty()) {
-                throw new IllegalStateException();
+                throw new FilterCompileException("No compiled class files found. path=" + classRoot);
             }
             for (Path file : files) {
                 addFileToJar(classRoot, file, jarOutputStream);
@@ -166,7 +173,7 @@ public class Jar {
 
     private void mergeJar(Path sourceJarPath, JarOutputStream bundleOutput, Set<String> addedEntries) throws IOException {
         if (!Files.isRegularFile(sourceJarPath)) {
-            throw new IllegalStateException();
+            throw new FilterBundleException("Source filter jar does not exist. path=" + sourceJarPath);
         }
 
         try (JarFile sourceJar = new JarFile(sourceJarPath.toFile())) {
@@ -182,7 +189,7 @@ public class Jar {
                     continue;
                 }
                 if (!addedEntries.add(entryName)) {
-                    throw new IllegalStateException();
+                    throw new FilterBundleException("Duplicate jar entry while creating bundle: " + entryName);
                 }
                 JarEntry bundleEntry = new JarEntry(entryName);
                 bundleEntry.setTime(0L);
@@ -198,7 +205,7 @@ public class Jar {
     private void addBundleMetadata(List<FilterDefinition> definitions, long version, JarOutputStream bundleOutput, Set<String> addedEntries) throws IOException {
 
         if (!addedEntries.add(METADATA_ENTRY_NAME)) {
-            throw new IllegalStateException();
+            throw new FilterBundleException("Duplicate bundle metadata entry");
         }
 
         List<FilterConfigDto> configs = definitions.stream().map(FilterDefinition::config).toList();
@@ -246,7 +253,7 @@ public class Jar {
 
     private Path resolveBundlePath(long version) {
         if (version < 1) {
-            throw new IllegalArgumentException();
+            throw new FilterBundleException("Bundle version must be greater than zero. version=" + version);
         }
 
         return bundleRoot.resolve("bundle-" + version + ".jar");
@@ -263,52 +270,52 @@ public class Jar {
 
     private void validateFilter(FilterConfigDto config, long version) {
         if (config == null) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("Filter config is null");
         }
         String filterName = config.filterName();
         if (filterName == null || filterName.isBlank()) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("Filter name must not be blank");
         }
 
         if (!filterName.matches("[a-zA-Z0-9._-]+")) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("Filter name contains invalid characters: " + filterName);
         }
 
         if (version < 1) {
-            throw new IllegalArgumentException();
+            throw new InvalidFilterRequestException("Filter version must be greater than zero. version=" + version);
         }
     }
 
     private void validateBundle(Map<String, FilterDefinition> filters, long version) {
         if (filters == null) {
-            throw new IllegalArgumentException();
+            throw new FilterBundleException("Filter bundle definitions must not be null");
         }
 
         if (version < 1) {
-            throw new IllegalArgumentException();
+            throw new FilterBundleException("Filter bundle version must be greater than zero. version=" + version);
         }
 
         for (Map.Entry<String, FilterDefinition> entry : filters.entrySet()) {
             String filterName = entry.getKey();
             FilterDefinition definition = entry.getValue();
             if (filterName == null || filterName.isBlank()) {
-                throw new IllegalArgumentException();
+                throw new FilterBundleException("Filter bundle entry name must not be blank");
             }
 
             if (definition == null) {
-                throw new IllegalArgumentException();
+                throw new FilterBundleException("Filter bundle definition must not be null. filterName=" + filterName);
             }
 
             if (definition.config() == null) {
-                throw new IllegalArgumentException();
+                throw new FilterBundleException("Filter bundle config must not be null. filterName=" + filterName);
             }
 
             if (definition.jarPath() == null) {
-                throw new IllegalArgumentException();
+                throw new FilterBundleException("Filter bundle jar path must not be null. filterName=" + filterName);
             }
 
             if (!Files.isRegularFile(definition.jarPath())) {
-                throw new IllegalArgumentException();
+                throw new FilterBundleException("Filter bundle jar file does not exist. filterName=" + filterName);
             }
         }
     }

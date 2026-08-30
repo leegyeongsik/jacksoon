@@ -1,5 +1,6 @@
 package io.jacksoon.router.config;
 
+import io.jacksoon.common.exception.ExceptionDispatcher;
 import io.jacksoon.common.handler.AcceptHandler;
 import io.jacksoon.common.handler.Handler;
 import io.jacksoon.common.handler.IOStore;
@@ -58,8 +59,8 @@ public class ReactorConfig {
     }
 
     @Init("clientReactor")
-    public Reactor clientReactor(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, @Init("acceptHandler") Handler handler) throws Exception {
-        Reactor reactor = new Reactor(selector);
+    public Reactor clientReactor(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, @Init("acceptHandler") Handler handler, ExceptionDispatcher exceptionDispatcher) throws Exception {
+        Reactor reactor = new Reactor(selector, exceptionDispatcher);
         serverSocketChannel.socket().bind(new InetSocketAddress(1012), 512);
         reactor.register(serverSocketChannel, handler, SelectionKey.OP_ACCEPT);
         return reactor;
@@ -71,7 +72,7 @@ public class ReactorConfig {
     }
 
     @Init("backendReactor")
-    public Reactor backendReactor(@Init("backendSelector") Selector selector) throws Exception {
-        return new Reactor(selector);
+    public Reactor backendReactor(@Init("backendSelector") Selector selector, ExceptionDispatcher exceptionDispatcher) throws Exception {
+        return new Reactor(selector, exceptionDispatcher);
     }
 }

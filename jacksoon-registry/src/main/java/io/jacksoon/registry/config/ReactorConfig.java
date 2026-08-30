@@ -1,5 +1,6 @@
 package io.jacksoon.registry.config;
 
+import io.jacksoon.common.exception.ExceptionDispatcher;
 import io.jacksoon.common.handler.AcceptHandler;
 import io.jacksoon.common.handler.Handler;
 import io.jacksoon.common.handler.IOStore;
@@ -32,8 +33,8 @@ public class ReactorConfig {
     }
 
     @Init("registryReactor")
-    public Reactor registryReactor(@Init("registrySelector") Selector selector, @Init("registryServerSocket") ServerSocketChannel serverSocketChannel, @Init("registryAcceptHandler") Handler handler) throws Exception {
-        Reactor reactor = new Reactor(selector);
+    public Reactor registryReactor(@Init("registrySelector") Selector selector, @Init("registryServerSocket") ServerSocketChannel serverSocketChannel, @Init("registryAcceptHandler") Handler handler, ExceptionDispatcher exceptionDispatcher) throws Exception {
+        Reactor reactor = new Reactor(selector, exceptionDispatcher);
         serverSocketChannel.socket().bind(new InetSocketAddress(1013));
         reactor.register(serverSocketChannel, handler, SelectionKey.OP_ACCEPT);
         return reactor;
@@ -50,7 +51,7 @@ public class ReactorConfig {
     }
 
     @Init("endpointReactor")
-    public Reactor endpointReactor(@Init("endpointSelector") Selector selector) {
-        return new Reactor(selector);
+    public Reactor endpointReactor(@Init("endpointSelector") Selector selector, ExceptionDispatcher exceptionDispatcher) {
+        return new Reactor(selector, exceptionDispatcher);
     }
 }

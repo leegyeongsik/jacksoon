@@ -1,6 +1,7 @@
 package io.jacksoon.router.connection.client;
 
 import io.jacksoon.common.handler.ClientConnectionLifecycle;
+import io.jacksoon.router.exception.RouterConfigurationException;
 
 import java.nio.channels.SelectionKey;
 import java.util.Set;
@@ -96,7 +97,7 @@ public class ClientConnectionManager implements ClientConnectionLifecycle {
 
     public void inspect(ClientConnectionTier tier, long now) {
         if (tier == ClientConnectionTier.CLOSE) {
-            throw new IllegalArgumentException("CLOSE tier is handled by ClientConnectionCloseWorker");
+            throw new RouterConfigurationException("CLOSE tier is handled by ClientConnectionCloseWorker");
         }
         Set<SelectionKey> tierClients = clients(tier);
         for (SelectionKey selectionKey : tierClients) {
@@ -201,9 +202,9 @@ public class ClientConnectionManager implements ClientConnectionLifecycle {
                 }
                 return ClientConnectionTier.HOT;
             case CLOSE:
-                throw new IllegalStateException("CLOSE tier does not transition by request rate");
+                throw new RouterConfigurationException("CLOSE tier does not transition by request rate");
             default:
-                throw new IllegalStateException("Unknown tier: " + tier);
+                throw new RouterConfigurationException("Unknown tier: " + tier);
         }
     }
 
@@ -226,7 +227,7 @@ public class ClientConnectionManager implements ClientConnectionLifecycle {
             case COLD -> coldClients;
             case WARM -> warmClients;
             case HOT -> hotClients;
-            case CLOSE -> throw new IllegalArgumentException("CLOSE tier uses closeQueue");
+            case CLOSE -> throw new RouterConfigurationException("CLOSE tier uses closeQueue");
         };
     }
 

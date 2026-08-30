@@ -1,5 +1,6 @@
 package io.jacksoon.router.worker;
 
+import io.jacksoon.common.exception.ExceptionDispatcher;
 import io.jacksoon.router.filter.FilterExecutor;
 import io.jacksoon.router.filter.FilterRequestSetting;
 
@@ -7,11 +8,13 @@ public class FilterWorker implements Runnable {
     private final FilterRequestSetting setting;
     private final FilterExecutor executor;
     private final long intervalMillis;
+    private final ExceptionDispatcher exceptionDispatcher;
 
-    public FilterWorker(FilterExecutor executor, FilterRequestSetting setting, long intervalMillis) {
+    public FilterWorker(FilterExecutor executor, FilterRequestSetting setting, long intervalMillis, ExceptionDispatcher exceptionDispatcher) {
         this.executor = executor;
         this.setting = setting;
         this.intervalMillis = intervalMillis;
+        this.exceptionDispatcher = exceptionDispatcher;
     }
 
     @Override
@@ -23,18 +26,22 @@ public class FilterWorker implements Runnable {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
-            } catch (RuntimeException e) {
-                e.printStackTrace();
-                sleepAfterFailure();
+            } catch (Exception e) {
+                exceptionDispatcher.dispatch(e);
+                if (!sleepAfterFailure()) {
+                    break;
+                }
             }
         }
     }
 
-    private void sleepAfterFailure() {
+    private boolean sleepAfterFailure() {
         try {
             Thread.sleep(intervalMillis);
+            return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return false;
         }
     }
 }

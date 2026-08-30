@@ -6,6 +6,7 @@ import io.jacksoon.common.filter.FilterConfigDto;
 import io.jacksoon.common.filter.FilterRegistryKey;
 import io.jacksoon.common.filter.RouterFilter;
 import io.jacksoon.init.annotation.Init;
+import io.jacksoon.router.exception.RouterFilterException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -46,19 +47,19 @@ public class FilterLoad {
         try {
             HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
             if (response.statusCode() != 200) {
-                throw new IllegalArgumentException();
+                throw new RouterFilterException("Filter version request failed. status=" + response.statusCode());
             }
             byte[] responseBody = response.body();
             if (responseBody == null || responseBody.length != Long.BYTES) {
-                throw new IllegalArgumentException();
+                throw new RouterFilterException("Invalid filter version response body");
             }
 
             return ByteBuffer.wrap(responseBody).getLong();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Interrupted while requesting filter version", e);
         } catch (IOException e) {
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Failed to request filter version", e);
         }
     }
 
@@ -86,9 +87,12 @@ public class FilterLoad {
             return metadata.version();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Interrupted while loading filter bundle", e);
         } catch (Exception e) {
-            throw new IllegalArgumentException();
+            if (e instanceof RouterFilterException routerFilterException) {
+                throw routerFilterException;
+            }
+            throw new RouterFilterException("Failed to load filter bundle. url=" + bundleUrl, e);
         } finally {
             closeQuietly(classLoader);
             deleteQuietly(tempBundlePath);
@@ -100,11 +104,11 @@ public class FilterLoad {
 
         HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
         if (response.statusCode() != 200) {
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Filter bundle request failed. status=" + response.statusCode());
         }
         byte[] bundleBytes = response.body();
         if (bundleBytes == null || bundleBytes.length == 0) {
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Filter bundle response body is empty");
         }
         return bundleBytes;
     }
@@ -122,7 +126,7 @@ public class FilterLoad {
         try (JarFile jarFile = new JarFile(bundlePath.toFile())) {
             JarEntry metadataEntry = jarFile.getJarEntry(METADATA_ENTRY_NAME);
             if (metadataEntry == null) {
-                throw new IllegalArgumentException();
+                throw new RouterFilterException("Filter bundle metadata entry not found");
             }
 
             try (InputStream inputStream = jarFile.getInputStream(metadataEntry)) {
@@ -133,15 +137,15 @@ public class FilterLoad {
 
     private void validateMetadata(FilterBundleMetadata metadata) {
         if (metadata == null) {
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Filter bundle metadata is null");
         }
 
         if (metadata.version() < 1) {
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Filter bundle version must be greater than zero");
         }
 
         if (metadata.filters() == null) {
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Filter bundle filters must not be null");
         }
     }
 
@@ -192,7 +196,7 @@ public class FilterLoad {
         String className = config.className();
         Class<?> loadedClass = Class.forName(className, true, classLoader);
         if (!RouterFilter.class.isAssignableFrom(loadedClass)) {
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Loaded class does not implement RouterFilter. class=" + className);
         }
         Class<? extends RouterFilter> filterClass = loadedClass.asSubclass(RouterFilter.class);
         return filterClass.getDeclaredConstructor().newInstance();
@@ -200,17 +204,17 @@ public class FilterLoad {
 
     private void validateFilterConfig(FilterConfigDto config) {
         if (config == null) {
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Filter config must not be null");
         }
         if (config.filterName() == null || config.filterName().isBlank()) {
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Filter name must not be blank");
         }
         if (config.timing() == null) {
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Filter timing must not be null");
         }
 
         if (config.pipeline() == null) {
-            throw new IllegalArgumentException();
+            throw new RouterFilterException("Filter pipeline must not be null");
         }
     }
 

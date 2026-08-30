@@ -1,19 +1,21 @@
 package io.jacksoon.registry.worker;
 
+import io.jacksoon.common.exception.ExceptionDispatcher;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.registry.connection.EndPointConnectionManager;
 import io.jacksoon.registry.connection.EndpointConnectionContext;
-import io.jacksoon.registry.store.RegistryStore;
+import io.jacksoon.registry.exception.context.RegistryExceptionContext;
+import io.jacksoon.registry.exception.RegistryConnectionException;
 
 public class EndpointConnectionWorker implements Runnable {
     private final CommonBlockingQueue<EndpointConnectionContext> endpointConnectionQueue;
     private final EndPointConnectionManager connectionManager;
-    private final RegistryStore registryStore;
+    private final ExceptionDispatcher exceptionDispatcher;
 
-    public EndpointConnectionWorker(CommonBlockingQueue<EndpointConnectionContext> endpointConnectionQueue, EndPointConnectionManager connectionManager, RegistryStore registryStore) {
+    public EndpointConnectionWorker(CommonBlockingQueue<EndpointConnectionContext> endpointConnectionQueue, EndPointConnectionManager connectionManager, ExceptionDispatcher exceptionDispatcher) {
         this.endpointConnectionQueue = endpointConnectionQueue;
         this.connectionManager = connectionManager;
-        this.registryStore = registryStore;
+        this.exceptionDispatcher = exceptionDispatcher;
     }
 
     @Override
@@ -27,11 +29,20 @@ public class EndpointConnectionWorker implements Runnable {
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
-                if (context != null) {
-                    registryStore.removeEndpoint(context.getServiceName(), context.getInstanceId());
-                }
-                e.printStackTrace();
+                RegistryConnectionException exception = e instanceof RegistryConnectionException registryConnectionException
+                        ? registryConnectionException
+                        : new RegistryConnectionException(
+                        "Failed to connect endpoint" + describe(context),
+                        e
+                );
+                exceptionDispatcher.dispatch(RegistryExceptionContext.of(context), exception);
             }
         }
+    }
+    private String describe(EndpointConnectionContext context) {
+        if (context == null) {
+            return "";
+        }
+        return ". serviceName=" + context.getServiceName() + ", instanceId=" + context.getInstanceId();
     }
 }

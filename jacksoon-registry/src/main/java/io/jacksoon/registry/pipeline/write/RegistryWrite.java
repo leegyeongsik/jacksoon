@@ -1,5 +1,6 @@
 package io.jacksoon.registry.pipeline.write;
 
+import io.jacksoon.registry.exception.RegistryResponseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.common.handler.IOStore;
@@ -27,6 +28,7 @@ public class RegistryWrite implements RegistryDepth {
     @Override
     public void dodo(RegistryPipelineContext context) {
         HttpResponse httpResponse = context.getResponse();
+        validateResponse(httpResponse);
 
         String body = toJson(httpResponse.getBody());
         byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
@@ -51,6 +53,19 @@ public class RegistryWrite implements RegistryDepth {
 
         ioStore.offer(selectionKey, new ResponseContext(current.get(), responseBuffer, context.isCloseAfterWrite()));
         context.setEvent(null);
+    }
+
+    private void validateResponse(HttpResponse response) {
+        if (response == null) {
+            throw new RegistryResponseException("HttpResponse is null");
+        }
+        int statusCode = response.getStatusCode();
+        if (statusCode < 100 || statusCode > 599) {
+            throw new RegistryResponseException("Invalid HTTP response status: " + statusCode);
+        }
+        if (response.getReasonPhrase() == null || response.getReasonPhrase().isBlank()) {
+            throw new RegistryResponseException("HTTP reason phrase is empty. statusCode=" + statusCode);
+        }
     }
 
     private String createResponseHeader(HttpResponse response) {
@@ -85,7 +100,7 @@ public class RegistryWrite implements RegistryDepth {
         try {
             return objectMapper.writeValueAsString(body);
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to serialize response body", e);
+            throw new RegistryResponseException("Failed to serialize response body", e);
         }
     }
 

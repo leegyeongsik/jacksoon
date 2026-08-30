@@ -1,6 +1,7 @@
 package io.jacksoon.registry.config;
 
 import io.jacksoon.common.connection.ConnectionHandlerRegistry;
+import io.jacksoon.common.exception.ExceptionDispatcher;
 import io.jacksoon.common.produce.dto.ProduceDto;
 import io.jacksoon.common.produce.worker.ProduceWorker;
 import io.jacksoon.common.produce.worker.SendStore;
@@ -14,7 +15,6 @@ import io.jacksoon.registry.connection.event.EndPointEventRegistry;
 import io.jacksoon.registry.handle.EndPointConnectionHandler;
 import io.jacksoon.registry.pipeline.context.RegistryPipelineContext;
 import io.jacksoon.registry.pipeline.executor.RegistryPipelineTaskExecutor;
-import io.jacksoon.registry.store.RegistryStore;
 import io.jacksoon.registry.worker.EndPointEventWorker;
 import io.jacksoon.registry.worker.EndPointHealthCheckWorker;
 import io.jacksoon.registry.worker.EndpointConnectionWorker;
@@ -23,27 +23,26 @@ import io.jacksoon.registry.worker.RegistryPipelineWorker;
 @Init
 public class WorkerPoolConfig {
     @Init
-    public CommonWorkerPool<RegistryPipelineWorker> registryPipelineWorkerPool(RegistryPipelineTaskExecutor executor, CommonBlockingQueue<RegistryPipelineContext> registryPipelineQueue) {
-        return new CommonWorkerPool<>(1, () -> new RegistryPipelineWorker(registryPipelineQueue, executor));
+    public CommonWorkerPool<RegistryPipelineWorker> registryPipelineWorkerPool(RegistryPipelineTaskExecutor executor, CommonBlockingQueue<RegistryPipelineContext> registryPipelineQueue, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new RegistryPipelineWorker(registryPipelineQueue, executor, exceptionDispatcher));
     }
 
     @Init
-    public CommonWorkerPool<EndpointConnectionWorker> endpointConnectionWorkerPool(EndPointConnectionManager connectionManager, CommonBlockingQueue<EndpointConnectionContext> endpointConnectionQueue, RegistryStore registryStore) {
-        return new CommonWorkerPool<>(1, () -> new EndpointConnectionWorker(endpointConnectionQueue, connectionManager, registryStore));
+    public CommonWorkerPool<EndpointConnectionWorker> endpointConnectionWorkerPool(EndPointConnectionManager connectionManager, CommonBlockingQueue<EndpointConnectionContext> endpointConnectionQueue, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new EndpointConnectionWorker(endpointConnectionQueue, connectionManager, exceptionDispatcher));
     }
 
     @Init
-    public CommonWorkerPool<EndPointEventWorker> endPointEventWorkerPool(CommonBlockingQueue<EndPointEvent> endPointEventQueue , EndPointEventRegistry endPointEventRegistry) {
-        return new CommonWorkerPool<>(1, () -> new EndPointEventWorker(endPointEventQueue,endPointEventRegistry));
+    public CommonWorkerPool<EndPointEventWorker> endPointEventWorkerPool(CommonBlockingQueue<EndPointEvent> endPointEventQueue, EndPointEventRegistry endPointEventRegistry, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new EndPointEventWorker(endPointEventQueue, endPointEventRegistry, exceptionDispatcher));
     }
 
     @Init
-    public CommonWorkerPool<EndPointHealthCheckWorker> endPointHealthCheckWorkerPool(ConnectionHandlerRegistry<EndPointConnectionHandler> registry) {
-        return new CommonWorkerPool<>(1, () -> new EndPointHealthCheckWorker(registry));
+    public CommonWorkerPool<EndPointHealthCheckWorker> endPointHealthCheckWorkerPool(ConnectionHandlerRegistry<EndPointConnectionHandler> registry, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new EndPointHealthCheckWorker(registry, exceptionDispatcher));
     }
     @Init
-    public CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool(CommonBlockingQueue<ProduceDto> queue, SendStore sendStore) {
-        return new CommonWorkerPool<>(1, () -> new ProduceWorker<>(queue, sendStore));
+    public CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool(CommonBlockingQueue<ProduceDto> queue, SendStore sendStore, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new ProduceWorker<>(queue, sendStore, exceptionDispatcher));
     }
-
 }

@@ -3,6 +3,7 @@ package io.jacksoon.filterManagement.pipeline.write;
 import io.jacksoon.common.handler.IOStore;
 import io.jacksoon.common.pipeline.context.HttpResponse;
 import io.jacksoon.common.util.ResponseContext;
+import io.jacksoon.filterManagement.exception.InvalidFilterResponseException;
 import io.jacksoon.filterManagement.pipeline.context.FilterPipelineContext;
 import io.jacksoon.filterManagement.pipeline.depth.FilterDepth;
 import io.jacksoon.init.annotation.Init;
@@ -50,15 +51,15 @@ public class FilterWrite implements FilterDepth {
 
     private void validateResponse(HttpResponse response) {
         if (response == null) {
-            throw new IllegalStateException("HttpResponse is null");
+            throw new InvalidFilterResponseException("HttpResponse is null");
         }
 
         int statusCode = response.getStatusCode();
         if (statusCode < 100 || statusCode > 599) {
-            throw new IllegalStateException("Invalid HTTP response status: " + statusCode + " " + response.getReasonPhrase());
+            throw new InvalidFilterResponseException("Invalid HTTP response status: " + statusCode + " " + response.getReasonPhrase());
         }
         if (response.getReasonPhrase() == null) {
-            throw new IllegalStateException("HTTP reason phrase is null. statusCode=" + statusCode);
+            throw new InvalidFilterResponseException("HTTP reason phrase is null. statusCode=" + statusCode);
         }
     }
     private String createResponseHeader(HttpResponse response) {

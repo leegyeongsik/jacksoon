@@ -3,6 +3,7 @@ package io.jacksoon.registry.connection.store;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.common.registry.dto.response.RegistrySnapshot;
 import io.jacksoon.init.annotation.Init;
+import io.jacksoon.registry.exception.RegistryConsoleSyncException;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -32,17 +33,18 @@ public class ConsoleRegistryClient {
             );
 
             if (response.statusCode() != 200) {
-                throw new IllegalStateException(
-                        "Console registry snapshot request failed. status=" + response.statusCode()
-                );
+                throw new RegistryConsoleSyncException("Console registry snapshot request failed. status=" + response.statusCode());
             }
 
             return objectMapper.readValue(response.body(), RegistrySnapshot.class);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while fetching console registry snapshot", e);
+            throw new RegistryConsoleSyncException("Interrupted while fetching console registry snapshot", e);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to fetch console registry snapshot", e);
+            if (e instanceof RegistryConsoleSyncException registryConsoleSyncException) {
+                throw registryConsoleSyncException;
+            }
+            throw new RegistryConsoleSyncException("Failed to fetch console registry snapshot", e);
         }
     }
 }

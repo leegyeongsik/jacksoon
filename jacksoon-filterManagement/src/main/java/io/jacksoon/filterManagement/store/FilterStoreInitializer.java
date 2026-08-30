@@ -3,6 +3,7 @@ package io.jacksoon.filterManagement.store;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.common.filter.FilterBundleMetadata;
 import io.jacksoon.common.filter.FilterConfigDto;
+import io.jacksoon.filterManagement.exception.FilterStoreException;
 import io.jacksoon.init.annotation.Init;
 
 import java.io.IOException;
@@ -50,7 +51,7 @@ public class FilterStoreInitializer {
                 System.err.println("filter store initialize failed: " + candidate.path() + ", reason=" + e.getMessage());
             }
         }
-        throw new IllegalStateException("filter store initialize: no valid local bundle");
+        throw new FilterStoreException("filter store initialize: no valid local bundle");
     }
     private RestoredState restore(BundleCandidate candidate) throws IOException {
         FilterBundleMetadata metadata = readMetadata(candidate.path());
@@ -60,9 +61,9 @@ public class FilterStoreInitializer {
         for (FilterConfigDto config : metadata.filters()) {
             validateConfig(config);
             if (filters.containsKey(config.filterName())) {
-                throw new IllegalStateException("duplicated filter: " + config.filterName());
+                throw new FilterStoreException("duplicated filter: " + config.filterName());
             }
-            Artifact artifact = findLatestArtifact(config, metadata.version()).orElseThrow(() -> new IllegalStateException("artifact not found: " + config.filterName()));
+            Artifact artifact = findLatestArtifact(config, metadata.version()).orElseThrow(() -> new FilterStoreException("artifact not found: " + config.filterName()));
             filters.put(config.filterName(), new FilterDefinition(config, artifact.version(), artifact.path()));
         }
         return new RestoredState(metadata.version(), candidate.path(), Map.copyOf(filters));
@@ -79,7 +80,7 @@ public class FilterStoreInitializer {
                     .sorted(Comparator.comparingLong(BundleCandidate::version).reversed())
                     .toList();
         } catch (IOException e) {
-            throw new IllegalStateException(e);
+            throw new FilterStoreException("Failed to list filter bundles", e);
         }
     }
 
@@ -104,7 +105,7 @@ public class FilterStoreInitializer {
         try (JarFile jarFile = new JarFile(bundlePath.toFile())) {
             JarEntry metadataEntry = jarFile.getJarEntry(METADATA_ENTRY_NAME);
             if (metadataEntry == null) {
-                throw new IllegalStateException("bundle metadata not found");
+                throw new FilterStoreException("bundle metadata not found");
             }
 
             try (InputStream inputStream = jarFile.getInputStream(metadataEntry)) {
@@ -115,16 +116,16 @@ public class FilterStoreInitializer {
 
     private void validateMetadata(BundleCandidate candidate, FilterBundleMetadata metadata) {
         if (metadata == null) {
-            throw new IllegalStateException("metadata is null");
+            throw new FilterStoreException("metadata is null");
         }
         if (metadata.version() != candidate.version()) {
-            throw new IllegalStateException("bundle version mismatch");
+            throw new FilterStoreException("bundle version mismatch");
         }
         if (metadata.version() < 1L) {
-            throw new IllegalStateException("invalid bundle version");
+            throw new FilterStoreException("invalid bundle version");
         }
         if (metadata.filters() == null) {
-            throw new IllegalStateException("filters is null");
+            throw new FilterStoreException("filters is null");
         }
     }
 
@@ -143,7 +144,7 @@ public class FilterStoreInitializer {
                     .sorted(Comparator.reverseOrder())
                     .forEach(versions::add);
         } catch (IOException e) {
-            throw new IllegalStateException(e);
+            throw new FilterStoreException("Failed to list filter work directories", e);
         }
 
         for (long artifactVersion : versions) {
@@ -180,16 +181,16 @@ public class FilterStoreInitializer {
 
     private void validateConfig(FilterConfigDto config) {
         if (config == null) {
-            throw new IllegalStateException("filter config is null");
+            throw new FilterStoreException("filter config is null");
         }
         if (config.filterName() == null || config.filterName().isBlank()) {
-            throw new IllegalStateException("filter name is empty");
+            throw new FilterStoreException("filter name is empty");
         }
         if (config.className() == null || config.className().isBlank()) {
-            throw new IllegalStateException("filter class name is empty");
+            throw new FilterStoreException("filter class name is empty");
         }
         if (config.timing() == null || config.pipeline() == null) {
-            throw new IllegalStateException("filter metadata is invalid");
+            throw new FilterStoreException("filter metadata is invalid");
         }
     }
 

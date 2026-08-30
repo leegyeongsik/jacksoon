@@ -4,8 +4,11 @@ import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.registry.connection.EndpointConnectionContext;
 import io.jacksoon.registry.dto.request.RegistryRegisterRequest;
+import io.jacksoon.registry.exception.InvalidRegistryRequestException;
 import io.jacksoon.registry.pipeline.context.RegistryPipelineContext;
 import io.jacksoon.registry.pipeline.depth.RegistryDepth;
+
+import java.util.Map;
 
 @Init
 public class RegistryConnection implements RegistryDepth {
@@ -18,14 +21,27 @@ public class RegistryConnection implements RegistryDepth {
     @Override
     public void dodo(RegistryPipelineContext context) {
         RegistryRegisterRequest request = context.getRegisterRequest();
-
         if (request == null) {
-            throw new IllegalStateException("registerRequest is null");
+            throw new InvalidRegistryRequestException("registerRequest is null");
         }
-        EndpointConnectionContext connectionContext = new EndpointConnectionContext(request.getServiceName(), request.getInstanceId(), request.getEndpoint().getHost(), request.getEndpoint().getPort(), request.getEndpoint().getProtocol(), request.getEndpoint().getHealthPath());
+
+        EndpointConnectionContext connectionContext = new EndpointConnectionContext(
+                request.getServiceName(),
+                request.getInstanceId(),
+                request.getEndpoint().getHost(),
+                request.getEndpoint().getPort(),
+                request.getEndpoint().getProtocol(),
+                request.getEndpoint().getHealthPath(),
+                context.getRegistrationId()
+        );
         endpointConnectionQueue.put(connectionContext);
+
+        context.getResponse().setStatusCode(202);
+        context.getResponse().setReasonPhrase("Accepted");
+        context.getResponse().setBody(Map.of("status", "accepted", "serviceName", request.getServiceName(), "instanceId", request.getInstanceId()));
         context.setEvent("write");
     }
+
     @Override
     public String currentEvent() {
         return "connection";

@@ -1,5 +1,6 @@
 package io.jacksoon.router.config;
 
+import io.jacksoon.common.exception.ExceptionDispatcher;
 import io.jacksoon.common.produce.dto.ProduceDto;
 import io.jacksoon.common.produce.worker.FileStore;
 import io.jacksoon.common.produce.worker.ProduceWorker;
@@ -7,10 +8,10 @@ import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.common.util.CommonWorkerPool;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.router.connection.BackendConnectionPoolManager;
+import io.jacksoon.router.connection.RegistryCheckManager;
 import io.jacksoon.router.connection.client.ClientConnectionManager;
 import io.jacksoon.router.connection.client.ClientConnectionPolicy;
 import io.jacksoon.router.connection.client.ClientConnectionTier;
-import io.jacksoon.router.connection.RegistryCheckManager;
 import io.jacksoon.router.filter.FilterExecutor;
 import io.jacksoon.router.filter.FilterRequestSetting;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
@@ -25,60 +26,62 @@ import io.jacksoon.router.worker.*;
 @Init
 public class WorkerPoolConfig {
     @Init
-    public CommonWorkerPool<RouterPipelineWorker> routerPipelineWorkerPool(RouterPipelineTaskExecutor executor, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue) {
-        return new CommonWorkerPool<>(4, () -> new RouterPipelineWorker(routerPipelineQueue, executor));
+    public CommonWorkerPool<RouterPipelineWorker> routerPipelineWorkerPool(RouterPipelineTaskExecutor executor, CommonBlockingQueue<RouterPipelineContext> routerPipelineQueue, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(4, () -> new RouterPipelineWorker(routerPipelineQueue, executor, exceptionDispatcher));
     }
 
     @Init
-    public CommonWorkerPool<RegistryCheckWorker> registryCheckWorkerPool(RegistryCheckManager registryCheckManager) {
-        return new CommonWorkerPool<>(1, () -> new RegistryCheckWorker(registryCheckManager, 3000L));
+    public CommonWorkerPool<RegistryCheckWorker> registryCheckWorkerPool(RegistryCheckManager registryCheckManager, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new RegistryCheckWorker(registryCheckManager, 3000L, exceptionDispatcher));
     }
 
     @Init
-    public CommonWorkerPool<ConnectionReduceCheckWorker> connectionReduceCheckWorkerPool(BackendConnectionPoolManager backendConnectionPoolManager) {
-        return new CommonWorkerPool<>(1, () -> new ConnectionReduceCheckWorker(backendConnectionPoolManager, 5000L));
+    public CommonWorkerPool<ConnectionReduceCheckWorker> connectionReduceCheckWorkerPool(BackendConnectionPoolManager backendConnectionPoolManager, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new ConnectionReduceCheckWorker(backendConnectionPoolManager, 5000L, exceptionDispatcher));
     }
-
 
     @Init("coldClientConnectionMonitorPool")
-    public CommonWorkerPool<ClientConnectionMonitorWorker> coldClientConnectionMonitorPool(ClientConnectionManager connectionManager, ClientConnectionPolicy connectionPolicy) {
-        return new CommonWorkerPool<>(1, () -> new ClientConnectionMonitorWorker(connectionManager, connectionPolicy, ClientConnectionTier.COLD));
+    public CommonWorkerPool<ClientConnectionMonitorWorker> coldClientConnectionMonitorPool(ClientConnectionManager connectionManager, ClientConnectionPolicy connectionPolicy, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new ClientConnectionMonitorWorker(connectionManager, connectionPolicy, ClientConnectionTier.COLD, exceptionDispatcher));
     }
 
     @Init("warmClientConnectionMonitorPool")
-    public CommonWorkerPool<ClientConnectionMonitorWorker> warmClientConnectionMonitorPool(ClientConnectionManager connectionManager, ClientConnectionPolicy connectionPolicy) {
-        return new CommonWorkerPool<>(1, () -> new ClientConnectionMonitorWorker(connectionManager, connectionPolicy, ClientConnectionTier.WARM));
+    public CommonWorkerPool<ClientConnectionMonitorWorker> warmClientConnectionMonitorPool(ClientConnectionManager connectionManager, ClientConnectionPolicy connectionPolicy, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new ClientConnectionMonitorWorker(connectionManager, connectionPolicy, ClientConnectionTier.WARM, exceptionDispatcher));
     }
 
     @Init("hotClientConnectionMonitorPool")
-    public CommonWorkerPool<ClientConnectionMonitorWorker> hotClientConnectionMonitorPool(ClientConnectionManager connectionManager, ClientConnectionPolicy connectionPolicy) {
-        return new CommonWorkerPool<>(1, () -> new ClientConnectionMonitorWorker(connectionManager, connectionPolicy, ClientConnectionTier.HOT));
+    public CommonWorkerPool<ClientConnectionMonitorWorker> hotClientConnectionMonitorPool(ClientConnectionManager connectionManager, ClientConnectionPolicy connectionPolicy, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new ClientConnectionMonitorWorker(connectionManager, connectionPolicy, ClientConnectionTier.HOT, exceptionDispatcher));
     }
 
     @Init("clientConnectionClosePool")
-    public CommonWorkerPool<ClientConnectionCloseWorker> clientConnectionClosePool(ClientConnectionManager connectionManager) {
-        return new CommonWorkerPool<>(1, () -> new ClientConnectionCloseWorker(connectionManager));
+    public CommonWorkerPool<ClientConnectionCloseWorker> clientConnectionClosePool(ClientConnectionManager connectionManager, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new ClientConnectionCloseWorker(connectionManager, exceptionDispatcher));
     }
 
     @Init
-    public CommonWorkerPool<FilterWorker> filterWorkerPool(FilterExecutor filterExecutor, FilterRequestSetting filterRequestSetting) {
-        return new CommonWorkerPool<>(1, () -> new FilterWorker(filterExecutor, filterRequestSetting, 60_000L));
+    public CommonWorkerPool<FilterWorker> filterWorkerPool(FilterExecutor filterExecutor, FilterRequestSetting filterRequestSetting, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new FilterWorker(filterExecutor, filterRequestSetting, 60_000L, exceptionDispatcher));
     }
 
     @Init
-    public CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool(CommonBlockingQueue<ProduceDto> queue, FileStore fileStore) {
-        return new CommonWorkerPool<>(5, () -> new ProduceWorker<>(queue, fileStore));
+    public CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool(CommonBlockingQueue<ProduceDto> queue, FileStore fileStore, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(5, () -> new ProduceWorker<>(queue, fileStore, exceptionDispatcher));
     }
+
     @Init("serviceMetricPool")
-    public CommonWorkerPool<ProduceMetricWorker> produceMetricPool(@Init("serviceMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue,CommonBlockingQueue<ProduceDto> produceDtoQueue){
-        return new CommonWorkerPool<>(5,()->new ProduceMetricWorker(serviceRequestQueue,produceDtoQueue, RouterMetricProduceDto.class));
+    public CommonWorkerPool<ProduceMetricWorker> produceMetricPool(@Init("serviceMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue, CommonBlockingQueue<ProduceDto> produceDtoQueue, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(5, () -> new ProduceMetricWorker(serviceRequestQueue, produceDtoQueue, RouterMetricProduceDto.class, exceptionDispatcher));
     }
+
     @Init("filterMetricPool")
-    public CommonWorkerPool<ProduceMetricWorker> filterMetricPool(@Init("filterMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue,CommonBlockingQueue<ProduceDto> produceDtoQueue){
-        return new CommonWorkerPool<>(1,()->new ProduceMetricWorker(serviceRequestQueue,produceDtoQueue, FilterMetricProduceDto.class));
+    public CommonWorkerPool<ProduceMetricWorker> filterMetricPool(@Init("filterMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue, CommonBlockingQueue<ProduceDto> produceDtoQueue, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new ProduceMetricWorker(serviceRequestQueue, produceDtoQueue, FilterMetricProduceDto.class, exceptionDispatcher));
     }
+
     @Init
-    public CommonWorkerPool<ReRoutingWorker> reRoutingPool(CommonBlockingQueue<ReRoutingContext> reRoutingQueue , HttpReRouter httpReRouter){
-        return new CommonWorkerPool<>(1,()->new ReRoutingWorker(reRoutingQueue,httpReRouter));
+    public CommonWorkerPool<ReRoutingWorker> reRoutingPool(CommonBlockingQueue<ReRoutingContext> reRoutingQueue, HttpReRouter httpReRouter, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new ReRoutingWorker(reRoutingQueue, httpReRouter, exceptionDispatcher));
     }
 }

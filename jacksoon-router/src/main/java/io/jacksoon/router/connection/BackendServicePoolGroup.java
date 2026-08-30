@@ -3,6 +3,7 @@ package io.jacksoon.router.connection;
 import io.jacksoon.common.registry.dto.response.EndpointSnapshot;
 import io.jacksoon.router.connection.factory.BackendConnectionFactory;
 import io.jacksoon.router.pipeline.context.ProxyContext;
+import io.jacksoon.router.exception.BackendUnavailableException;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,7 +62,7 @@ public class BackendServicePoolGroup {
     public synchronized void send(ProxyContext context) {
         BackendConnectionPool selected = selectInternal();
         if (selected == null) {
-            throw new IllegalStateException("No available backend connection pool");
+            throw new BackendUnavailableException(null, "No available backend connection pool");
         }
         selected.send(context);
     }

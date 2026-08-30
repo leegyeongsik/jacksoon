@@ -1,6 +1,7 @@
 package io.jacksoon.filterManagement.pipeline.task;
 
 import io.jacksoon.common.filter.FilterFileType;
+import io.jacksoon.filterManagement.exception.InvalidFilterRequestException;
 import io.jacksoon.filterManagement.pipeline.context.FilterPipelineContext;
 import io.jacksoon.filterManagement.pipeline.depth.FilterDepth;
 import io.jacksoon.init.annotation.Init;
@@ -13,7 +14,7 @@ public class FilterFileCheck implements FilterDepth { // 여기서 java파일이
         context.setEvent(switch (fileType) {
             case JAVA -> "compile";
             case JAR -> "jar-upload";
-            case UNKNOWN -> throw new IllegalArgumentException();
+            case UNKNOWN -> throw new InvalidFilterRequestException("Unknown filter file type");
         });
     }
 

@@ -16,7 +16,9 @@ public class EndPointConnectionManager implements ConnectionManager<EndpointConn
     private final ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry;
     private final CommonBlockingQueue<EndPointEvent> endpointEventQueue;
 
-    public EndPointConnectionManager(@Init("endpointSelector") Selector endpointSelector, ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry, CommonBlockingQueue<EndPointEvent> endpointEventQueue) {
+    public EndPointConnectionManager(@Init("endpointSelector") Selector endpointSelector,
+                                     ConnectionHandlerRegistry<EndPointConnectionHandler> endpointConnectionRegistry,
+                                     CommonBlockingQueue<EndPointEvent> endpointEventQueue) {
         this.endpointSelector = endpointSelector;
         this.endpointConnectionRegistry = endpointConnectionRegistry;
         this.endpointEventQueue = endpointEventQueue;
@@ -30,15 +32,22 @@ public class EndPointConnectionManager implements ConnectionManager<EndpointConn
                 context.getInstanceId(),
                 context.getHost(),
                 context.getPort(),
-                context.getHealthPath()
+                context.getHealthPath(),
+                context.getRegistrationId()
         );
-        new EndPointConnectionHandler(
+        EndPointConnectionHandler handler = new EndPointConnectionHandler(
                 endpointSelector,
                 socketChannel,
                 connection,
                 endpointConnectionRegistry,
                 endpointEventQueue
         );
+
+        EndPointConnectionHandler previous = endpointConnectionRegistry.put(context.key(), handler);
+        if (previous != null && previous != handler) {
+            previous.closeByReplacement();
+        }
+        handler.start();
         endpointSelector.wakeup();
     }
 }

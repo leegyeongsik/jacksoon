@@ -14,18 +14,21 @@ public class EndpointConnection {
     private final String host;
     private final int port;
     private final String healthPath;
+    private final long registrationId;
     @Setter
     private ByteBuffer requestBuffer;
     private final ByteBuffer responseBuffer = ByteBuffer.allocate(4096);
     @Setter
     private boolean connected;
-    public EndpointConnection(String key, String serviceName, String instanceId, String host, int port, String healthPath) {
+
+    public EndpointConnection(String key, String serviceName, String instanceId, String host, int port, String healthPath, long registrationId) {
         this.key = key;
         this.serviceName = serviceName;
         this.instanceId = instanceId;
         this.host = host;
         this.port = port;
         this.healthPath = healthPath;
+        this.registrationId = registrationId;
     }
 
     public void prepareHealthCheckRequest() {

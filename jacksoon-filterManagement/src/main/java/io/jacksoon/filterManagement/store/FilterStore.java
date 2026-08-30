@@ -1,5 +1,6 @@
 package io.jacksoon.filterManagement.store;
 
+import io.jacksoon.filterManagement.exception.FilterStoreException;
 import io.jacksoon.init.annotation.Init;
 
 import java.nio.file.Files;
@@ -22,7 +23,7 @@ public class FilterStore {// 여기서 컴파일 저장해놓고
 
     public void completeUpdate() {
         if (!operationLock.isHeldByCurrentThread()) {
-            throw new IllegalArgumentException();
+            throw new FilterStoreException("Filter update lock is not held by current thread");
         }
         operationLock.unlock();
     }
@@ -45,7 +46,7 @@ public class FilterStore {// 여기서 컴파일 저장해놓고
 
     public synchronized void initialize(Map<String, FilterDefinition> activeFilters, long version, Path bundlePath) {
         if (state.bundleVersion() != 0L) {
-            throw new IllegalStateException();
+            throw new FilterStoreException("FilterStore is already initialized");
         }
         validateState(activeFilters, version, bundlePath);
         state = new State(version, bundlePath, Map.copyOf(activeFilters));
@@ -53,10 +54,10 @@ public class FilterStore {// 여기서 컴파일 저장해놓고
 
     public void commit(Map<String, FilterDefinition> candidateFilters, long nextVersion, Path bundlePath) {
         if (!operationLock.isHeldByCurrentThread()) {
-            throw new IllegalArgumentException();
+            throw new FilterStoreException("Filter update lock is not held by current thread");
         }
         if (nextVersion != state.bundleVersion() + 1) {
-            throw new IllegalArgumentException();
+            throw new FilterStoreException("Invalid next filter bundle version. current=" + state.bundleVersion() + ", next=" + nextVersion);
         }
         validateState(candidateFilters, nextVersion, bundlePath);
         state = new State(nextVersion, bundlePath, Map.copyOf(candidateFilters));
@@ -64,13 +65,13 @@ public class FilterStore {// 여기서 컴파일 저장해놓고
 
     private void validateState(Map<String, FilterDefinition> filters, long version, Path bundlePath) {
         if (version < 1L) {
-            throw new IllegalArgumentException();
+            throw new FilterStoreException("Filter bundle version must be greater than zero");
         }
         if (filters == null) {
-            throw new IllegalArgumentException();
+            throw new FilterStoreException("Filter definitions must not be null");
         }
         if (bundlePath == null || !Files.isRegularFile(bundlePath)) {
-            throw new IllegalArgumentException();
+            throw new FilterStoreException("Filter bundle path is invalid: " + bundlePath);
         }
 
         for (Map.Entry<String, FilterDefinition> entry : filters.entrySet()) {
@@ -78,19 +79,19 @@ public class FilterStore {// 여기서 컴파일 저장해놓고
             FilterDefinition definition = entry.getValue();
 
             if (filterName == null || filterName.isBlank()) {
-                throw new IllegalArgumentException();
+                throw new FilterStoreException("Filter name must not be blank");
             }
             if (definition == null || definition.config() == null) {
-                throw new IllegalArgumentException();
+                throw new FilterStoreException("Filter definition is invalid. filterName=" + filterName);
             }
             if (!filterName.equals(definition.config().filterName())) {
-                throw new IllegalArgumentException();
+                throw new FilterStoreException("Filter definition name mismatch. filterName=" + filterName);
             }
             if (definition.artifactVersion() < 1L || definition.artifactVersion() > version) {
-                throw new IllegalArgumentException();
+                throw new FilterStoreException("Invalid filter artifact version. filterName=" + filterName);
             }
             if (definition.jarPath() == null || !Files.isRegularFile(definition.jarPath())) {
-                throw new IllegalArgumentException();
+                throw new FilterStoreException("Filter jar path is invalid. filterName=" + filterName);
             }
         }
     }

@@ -7,8 +7,6 @@ import io.jacksoon.registry.pipeline.depth.RegistryDepth;
 import io.jacksoon.registry.pipeline.util.RegistryRegisterRequestParser;
 import io.jacksoon.registry.store.RegistryStore;
 
-import java.nio.charset.StandardCharsets;
-
 @Init
 public class RegistryRegister implements RegistryDepth {
     private final RegistryStore registryStore;
@@ -18,11 +16,13 @@ public class RegistryRegister implements RegistryDepth {
         this.registryStore = registryStore;
         this.parser = parser;
     }
+
     @Override
     public void dodo(RegistryPipelineContext context) {
         RegistryRegisterRequest request = parser.parse(context);
-        registryStore.add(request);
+        long registrationId = registryStore.add(request);
         context.setRegisterRequest(request);
+        context.setRegistrationId(registrationId);
         context.setEvent("connection");
     }
 
