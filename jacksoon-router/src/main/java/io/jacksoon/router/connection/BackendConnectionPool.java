@@ -2,20 +2,26 @@ package io.jacksoon.router.connection;
 
 import io.jacksoon.common.registry.dto.response.EndpointSnapshot;
 import io.jacksoon.router.connection.factory.BackendConnectionFactory;
-import io.jacksoon.router.handler.BackendIOHandler;
 import io.jacksoon.router.exception.BackendConnectionException;
 import io.jacksoon.router.exception.BackendUnavailableException;
+import io.jacksoon.router.handler.BackendIOHandler;
 import io.jacksoon.router.pipeline.context.ProxyContext;
 import lombok.Getter;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeSet;
 
 public class BackendConnectionPool {
+    private volatile int totalPending;
     @Getter
     private final EndpointSnapshot endpoint;
+    @Getter
+    private final String serviceName;
     private final BackendConnectionFactory connectionFactory;
     private final int minConnection = 1;
     private final int maxConnection = 500;
@@ -23,102 +29,146 @@ public class BackendConnectionPool {
     private final int shrinkThreshold = 0;
     private final long idleTimeoutMillis = 30_000L;
     private final Map<BackendIOHandler, Node> nodeMap = new IdentityHashMap<>();
-    private Node head;
-    private Node tail;
-    private int size;
-    private boolean closed;
-    @Getter
-    private final String serviceName;
+    private final TreeSet<Node> nodes = new TreeSet<>(Comparator.comparingInt((Node node) -> node.pending).thenComparingLong(node -> node.order));
+    private long nextOrder;
+    private volatile boolean closed;
+
     public BackendConnectionPool(String serviceName, EndpointSnapshot endpoint, BackendConnectionFactory connectionFactory) {
+        this.serviceName = serviceName;
         this.endpoint = endpoint;
         this.connectionFactory = connectionFactory;
-        this.serviceName = serviceName;
         init();
     }
-    private void init() {
+
+    private synchronized void init() {
         for (int i = 0; i < minConnection; i++) {
             addConnection();
         }
     }
-    public EndpointSnapshot endpoint() {
-        return endpoint;
+
+    public void send(ProxyContext context) {
+        int attempts = 0;
+        while (attempts++ < maxConnection) {
+            Node node = reserve();
+            boolean accepted = node.handler.send(context);
+            if (accepted) {
+                return;
+            }
+            rollback(node);
+        }
+        throw new BackendConnectionException("Failed to send request to backend connection. serviceName=" + serviceName);
     }
-    public synchronized void send(ProxyContext context) {
+
+    private synchronized Node reserve() {
         if (closed) {
             throw new BackendUnavailableException(serviceName, "Backend connection pool is closed. serviceName=" + serviceName);
         }
         int attempts = 0;
         while (attempts++ < maxConnection) {
-            if (head == null) {
+            if (nodes.isEmpty()) {
                 addConnection();
             }
             growIfNeeded();
-            Node node = head;
-            if (node == null) {
-                throw new BackendUnavailableException(serviceName, "No backend connection. serviceName=" + serviceName);
+            if (nodes.isEmpty()) {
+                break;
             }
-            detach(node);
-            BackendIOHandler handler = node.handler;
-            if (!handler.isAlive()) {
-                nodeMap.remove(handler);
-                size--;
+            Node node = nodes.first();
+            if (!node.handler.isAlive()) {
+                removeNode(node);
                 continue;
             }
-            handler.increasePending();
-            insertSorted(node);
-            boolean accepted = handler.send(context);
-            if (accepted) {
-                return;
-            }
-            rollbackRejected(handler);
+            nodes.remove(node);
+            node.pending++;
+            node.order = nextOrder++;
+            node.handler.increasePending();
+            nodes.add(node);
+            totalPending++;
+            return node;
         }
-        throw new BackendConnectionException("Failed to send request to backend connection. serviceName=" + serviceName);
+        throw new BackendUnavailableException(serviceName, "No available backend connection. serviceName=" + serviceName);
     }
+
+    private synchronized void rollback(Node node) {
+        if (nodeMap.get(node.handler) != node) {
+            return;
+        }
+        nodes.remove(node);
+        if (node.pending > 0) {
+            node.pending--;
+            node.handler.decreasePending();
+            totalPending--;
+        }
+        if (!node.handler.isAlive()) {
+            nodeMap.remove(node.handler);
+            totalPending -= node.pending;
+            node.pending = 0;
+            return;
+        }
+        node.order = nextOrder++;
+        nodes.add(node);
+    }
+
     public synchronized void complete(BackendIOHandler handler) {
         Node node = nodeMap.get(handler);
         if (node == null) {
             return;
         }
-        detach(node);
-        handler.decreasePending();
-        if (handler.isAlive()) {
-            insertSorted(node);
-        } else {
-            nodeMap.remove(handler);
-            size--;
+        nodes.remove(node);
+        if (node.pending > 0) {
+            node.pending--;
+            handler.decreasePending();
+            totalPending--;
         }
+        if (!handler.isAlive()) {
+            nodeMap.remove(handler);
+            totalPending -= node.pending;
+            node.pending = 0;
+            return;
+        }
+        node.order = nextOrder++;
+        nodes.add(node);
     }
+
     public synchronized void removeClosed(BackendIOHandler handler) {
-        Node node = nodeMap.remove(handler);
+        Node node = nodeMap.get(handler);
         if (node == null) {
             return;
         }
-        detach(node);
-        size--;
+        removeNode(node);
     }
-    public synchronized void maintain() {
-        if (closed) {
-            return;
+
+    public void maintain() {
+        List<BackendIOHandler> handlers;
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
+            handlers = new ArrayList<>(nodeMap.keySet());
         }
         long now = System.currentTimeMillis();
-        for (BackendIOHandler handler : new ArrayList<>(nodeMap.keySet())) {
+        for (BackendIOHandler handler : handlers) {
             handler.checkTimeout(now);
         }
-        shrinkIfNeeded();
+        BackendIOHandler removable;
+        synchronized (this) {
+            removable = shrinkIfNeeded(System.currentTimeMillis());
+        }
+        if (removable != null) {
+            removable.closeByPool();
+        }
     }
-    public synchronized boolean available() {
+
+    public boolean available() {
         return !closed;
     }
-    public synchronized int load() {
+    public int totalLoad() {
         if (closed) {
             return Integer.MAX_VALUE;
         }
-        if (head == null) {
-            return 0;
-        }
-        return head.load();
+        return totalPending;
     }
-    public synchronized boolean sameEndpoint(EndpointSnapshot other) {
+
+    public boolean sameEndpoint(EndpointSnapshot other) {
         if (other == null) {
             return false;
         }
@@ -127,146 +177,84 @@ public class BackendConnectionPool {
                 && Objects.equals(endpoint.getProtocol(), other.getProtocol())
                 && Objects.equals(endpoint.getHealthPath(), other.getHealthPath());
     }
-    public synchronized void close() {
-        if (closed) {
-            return;
-        }
-        closed = true;
-        Node current = head;
-        while (current != null) {
-            Node next = current.next;
-            current.prev = null;
-            current.next = null;
-            current.handler.closeByPool();
-            current = next;
-        }
-        head = null;
-        tail = null;
-        nodeMap.clear();
-        size = 0;
-    }
-    private void growIfNeeded() {
-        if (size >= maxConnection) {
-            return;
-        }
-        if (head == null) {
-            addConnection();
-            return;
-        }
-        if (head.load() >= growThreshold) {
-            addConnection();
-        }
-    }
-    private void shrinkIfNeeded() {
-        if (size <= minConnection) {
-            return;
-        }
-        if (head == null || head.next == null) {
-            return;
-        }
 
-        long now = System.currentTimeMillis();
-        Node first = head;
-        Node second = head.next;
-        if (first.load() <= shrinkThreshold && second.load() <= shrinkThreshold && first.handler.removable(now, idleTimeoutMillis)) {
-            remove(first.handler);
+    public void close() {
+        List<BackendIOHandler> handlers;
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            handlers = new ArrayList<>(nodeMap.keySet());
+            nodeMap.clear();
+            nodes.clear();
+            totalPending = 0;
         }
+        for (BackendIOHandler handler : handlers) {
+            handler.closeByPool();
+        }
+    }
+
+    private void growIfNeeded() {
+        if (nodes.size() >= maxConnection) {
+            return;
+        }
+        if (nodes.isEmpty()) {
+            addConnection();
+            return;
+        }
+        if (nodes.first().pending >= growThreshold) {
+            addConnection();
+        }
+    }
+
+    private BackendIOHandler shrinkIfNeeded(long now) {
+        if (nodes.size() <= minConnection) {
+            return null;
+        }
+        Node first = nodes.pollFirst();
+        if (first == null) {
+            return null;
+        }
+        Node second = nodes.isEmpty() ? null : nodes.first();
+        if (second == null
+                || first.pending > shrinkThreshold
+                || second.pending > shrinkThreshold
+                || !first.handler.removable(now, idleTimeoutMillis)) {
+            nodes.add(first);
+            return null;
+        }
+        nodeMap.remove(first.handler);
+        totalPending -= first.pending;
+        return first.handler;
     }
 
     private void addConnection() {
-        if (closed) {
+        if (closed || nodes.size() >= maxConnection) {
             return;
         }
-        if (size >= maxConnection) {
-            return;
-        }
-
         BackendIOHandler handler = connectionFactory.create(this);
         handler.setConnectionPool(this);
-        Node node = new Node(handler);
+        Node node = new Node(handler, nextOrder++);
         nodeMap.put(handler, node);
-        insertSorted(node);
-        size++;
+        nodes.add(node);
     }
-    private void remove(BackendIOHandler handler) {
-        Node node = nodeMap.remove(handler);
-        if (node == null) {
-            return;
-        }
-        detach(node);
-        size--;
-        handler.closeByPool();
-    }
-    private void insertSorted(Node node) {
-        node.prev = null;
-        node.next = null;
-        if (head == null) {
-            head = node;
-            tail = node;
-            return;
-        }
-        Node current = head;
-        while (current != null && current.load() <= node.load()) { // current가 큰놈위치를 찾음
-            current = current.next;
-        }
-        if (current == null) { // null이면 없다는거니까 마지막에 삽입 마지막 next는 node 노드 prev는 마지막
-            tail.next = node;
-            node.prev = tail;
-            tail = node;
-            return;
-        }
-        if (current == head) { // head라는거는 처음인거니까 첫번째로하는데 next는 current , current prev는 node
-            node.next = head;
-            head.prev = node;
-            head = node;
-            return;
-        }
-        Node prev = current.prev;
-        prev.next = node;
-        node.prev = prev;
-        node.next = current;
-        current.prev = node;
-    }
-    private void detach(Node node) {
-        Node prev = node.prev;
-        Node next = node.next;
-        if (prev != null) { // 일단 node의 연결을 끊음 그러면 노드 왼쪽은 노드 오른쪽이랑 연결하고 오른쪽은 왼쪽이랑 연결
-            prev.next = next;
-        } else {
-            head = next;
-        }
-        if (next != null) {
-            next.prev = prev;
-        } else {
-            tail = prev;
-        }
-        node.prev = null;
-        node.next = null;
-    }
-    private static class Node {
-        private final BackendIOHandler handler;
-        private Node prev;
-        private Node next;
 
-        private Node(BackendIOHandler handler) {
-            this.handler = handler;
-        }
-        private int load() {
-            return handler.load();
-        }
+    private void removeNode(Node node) {
+        nodeMap.remove(node.handler);
+        nodes.remove(node);
+        totalPending -= node.pending;
+        node.pending = 0;
     }
-    private void rollbackRejected(BackendIOHandler handler) {
-        Node node = nodeMap.get(handler);
-        if (node == null) {
-            return;
+
+    private static final class Node {
+        private final BackendIOHandler handler;
+        private int pending;
+        private long order;
+
+        private Node(BackendIOHandler handler, long order) {
+            this.handler = handler;
+            this.order = order;
         }
-        detach(node);
-        handler.decreasePending();
-        if (handler.isAlive()) {
-            insertSorted(node);
-            return;
-        }
-        nodeMap.remove(handler);
-        size--;
     }
 }

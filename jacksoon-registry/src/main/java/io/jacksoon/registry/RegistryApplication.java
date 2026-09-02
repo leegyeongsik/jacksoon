@@ -1,5 +1,6 @@
 package io.jacksoon.registry;
 
+import io.jacksoon.common.exception.ExceptionDispatcher;
 import io.jacksoon.common.produce.dto.ProduceDto;
 import io.jacksoon.common.produce.worker.ProduceWorker;
 import io.jacksoon.common.selector.Reactor;
@@ -20,7 +21,7 @@ public class RegistryApplication {
     private final CommonWorkerPool<EndPointHealthCheckWorker>healthCheckWorker;
     private final CommonWorkerPool<EndPointEventWorker>eventWorker;
     private final CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool;
-
+    private final ExceptionDispatcher exceptionDispatcher;
 
     public RegistryApplication(RegistryInitializer registryInitializer,
                                @Init("registryReactor") Reactor registryReactor,
@@ -29,7 +30,7 @@ public class RegistryApplication {
                                CommonWorkerPool<EndpointConnectionWorker> endpointConnectionWorkerPool,
                                CommonWorkerPool<EndPointHealthCheckWorker> healthCheckWorker,
                                CommonWorkerPool<EndPointEventWorker> eventWorker,
-                               CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool) {
+                               CommonWorkerPool<ProduceWorker<ProduceDto>> produceWorkerPool, ExceptionDispatcher exceptionDispatcher) {
         this.registryInitializer = registryInitializer;
         this.registryReactor = registryReactor;
         this.endpointReactor = endpointReactor;
@@ -38,10 +39,15 @@ public class RegistryApplication {
         this.healthCheckWorker = healthCheckWorker;
         this.eventWorker = eventWorker;
         this.produceWorkerPool = produceWorkerPool;
+        this.exceptionDispatcher = exceptionDispatcher;
     }
 
     public void start() {
-        registryInitializer.initialize();
+        try {
+            registryInitializer.initialize();
+        }catch (Exception e){
+            exceptionDispatcher.dispatch(e);
+        }
         new Thread(registryReactor, "registry-reactor").start();
         new Thread(endpointReactor, "endpoint-reactor").start();
 

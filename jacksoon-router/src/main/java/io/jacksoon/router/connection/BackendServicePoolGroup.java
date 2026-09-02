@@ -2,31 +2,27 @@ package io.jacksoon.router.connection;
 
 import io.jacksoon.common.registry.dto.response.EndpointSnapshot;
 import io.jacksoon.router.connection.factory.BackendConnectionFactory;
-import io.jacksoon.router.pipeline.context.ProxyContext;
 import io.jacksoon.router.exception.BackendUnavailableException;
+import io.jacksoon.router.pipeline.context.ProxyContext;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class BackendServicePoolGroup {
     private final BackendConnectionFactory connectionFactory;
-    private final Map<String, BackendConnectionPool> endpointPoolMap = new HashMap<>();
-
+    private final Map<String, BackendConnectionPool> endpointPoolMap = new ConcurrentHashMap<>();
     BackendServicePoolGroup(BackendConnectionFactory connectionFactory) {
         this.connectionFactory = connectionFactory;
     }
-
     synchronized void sync(String serviceName, List<EndpointSnapshot> endpoints) {
         Set<String> liveEndpointIds = new HashSet<>();
-
         if (endpoints == null) {
             endpoints = List.of();
         }
-
         for (EndpointSnapshot endpoint : endpoints) {
             String instanceId = endpoint.getInstanceId();
             liveEndpointIds.add(instanceId);
@@ -46,20 +42,20 @@ public class BackendServicePoolGroup {
 
     private void removeDeadEndpoints(Set<String> liveEndpointIds) {
         List<String> remove = new ArrayList<>();
-        for (String s : endpointPoolMap.keySet()) {
-            if (!liveEndpointIds.contains(s)) {
-                remove.add(s);
+        for (String instanceId : endpointPoolMap.keySet()) {
+            if (!liveEndpointIds.contains(instanceId)) {
+                remove.add(instanceId);
             }
         }
-        for (String s : remove) {
-            BackendConnectionPool pool = endpointPoolMap.remove(s);
+        for (String instanceId : remove) {
+            BackendConnectionPool pool = endpointPoolMap.remove(instanceId);
             if (pool != null) {
                 pool.close();
             }
         }
     }
 
-    public synchronized void send(ProxyContext context) {
+    public void send(ProxyContext context) {
         BackendConnectionPool selected = selectInternal();
         if (selected == null) {
             throw new BackendUnavailableException(null, "No available backend connection pool");
@@ -72,19 +68,18 @@ public class BackendServicePoolGroup {
             if (!pool.available()) {
                 continue;
             }
-            if (selected == null || pool.load() < selected.load()) {
+            if (selected == null || pool.totalLoad() < selected.totalLoad()) {
                 selected = pool;
             }
         }
         return selected;
     }
 
-    synchronized void maintain() {
+    void maintain() {
         for (BackendConnectionPool pool : endpointPoolMap.values()) {
             pool.maintain();
         }
     }
-
     synchronized void close() {
         for (BackendConnectionPool pool : endpointPoolMap.values()) {
             pool.close();

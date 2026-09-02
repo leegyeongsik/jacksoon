@@ -7,6 +7,7 @@ import io.jacksoon.common.produce.worker.FileStore;
 import io.jacksoon.common.util.HttpRequestCheck;
 import io.jacksoon.common.util.HttpResponseCheck;
 import io.jacksoon.init.annotation.Init;
+import io.jacksoon.router.produce.metric.ServiceMetricStore;
 
 import java.nio.file.Path;
 
@@ -32,5 +33,15 @@ public class ConnectionConfig {
     @Init
     public FileStore fileStore(ObjectMapper objectMapper, RouterProperties properties){
         return new FileStore(objectMapper, Path.of(properties.metric().directory()));
+    }
+
+    @Init("serviceMetricStore")
+    public ServiceMetricStore serviceMetricStore(){
+        return new ServiceMetricStore();
+    }
+
+    @Init("filterMetricStore")
+    public ServiceMetricStore filterMetricStore(){
+        return new ServiceMetricStore();
     }
 }

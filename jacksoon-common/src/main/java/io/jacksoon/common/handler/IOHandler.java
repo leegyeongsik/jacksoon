@@ -28,7 +28,7 @@ public class IOHandler implements Handler {
     final ClientConnectionLifecycle connectionLifecycle;
     private ResponseContext currentWriteResponse;
     private final AtomicBoolean closed = new AtomicBoolean();
-    private final AtomicInteger nextRequestSequence = new AtomicInteger(1);
+    private int nextRequestSequence = 1;
 
     public IOHandler(Selector selector, SocketChannel socketChannel, RequestCheck requestCheck, RequestSubmitter requestSubmitter, IOStore ioStore, ClientConnectionLifecycle connectionLifecycle) throws IOException {
         this.requestSubmitter = requestSubmitter;
@@ -94,7 +94,7 @@ public class IOHandler implements Handler {
         while (result.complete()) {
             ByteBuffer ownedRequest = copyRequest(totalBuffer, result.requestLength());
             removeConsumedBytes(totalBuffer, result.requestLength());
-            int sequence = nextRequestSequence.getAndIncrement();
+            int sequence = nextRequestSequence++;
             boolean accepted = connectionLifecycle.requestSubmitted(selectionKey);
             if (!accepted) {
                 close();
@@ -114,6 +114,11 @@ public class IOHandler implements Handler {
     }
 
     private ByteBuffer copyRequest(ByteBuffer accumulation, int requestLength) {
+        if (accumulation.hasArray()) {
+            ByteBuffer owned = ByteBuffer.allocate(requestLength);
+            System.arraycopy(accumulation.array(), accumulation.arrayOffset(), owned.array(), owned.arrayOffset(), requestLength);
+            return owned;
+        }
         ByteBuffer source = accumulation.duplicate();
         source.flip();
         source.limit(requestLength);

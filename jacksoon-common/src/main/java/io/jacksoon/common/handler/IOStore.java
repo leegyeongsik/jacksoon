@@ -6,7 +6,7 @@ import java.nio.channels.CancelledKeyException;
 import java.nio.channels.SelectionKey;
 import java.util.Comparator;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.PriorityBlockingQueue;
+import java.util.PriorityQueue;
 public class IOStore {
     private final ConcurrentHashMap<SelectionKey, ClientState> clientMap = new ConcurrentHashMap<>();
     void initClient(SelectionKey selectionKey) {
@@ -17,6 +17,7 @@ public class IOStore {
         if (state == null) {
             return;
         }
+        boolean wakeupNeeded = false;
         synchronized (state) {
             if (!selectionKey.isValid()) {
                 return;
@@ -26,9 +27,12 @@ public class IOStore {
             ResponseContext head = state.queue.peek();
             if (head != null && head.sequence() == state.nextSequence) {
                 addInterestOpsLocked(selectionKey, SelectionKey.OP_WRITE);
+                wakeupNeeded = true;
             }
         }
-        selectionKey.selector().wakeup();
+        if (wakeupNeeded) {
+            selectionKey.selector().wakeup();
+        }
     }
     ResponseContext pollReadyOrDisableWrite(SelectionKey selectionKey) {
         ClientState state = clientMap.get(selectionKey);
@@ -89,7 +93,7 @@ public class IOStore {
     }
 
     private static final class ClientState {
-        private final PriorityBlockingQueue<ResponseContext> queue = new PriorityBlockingQueue<>(11, Comparator.comparingInt(ResponseContext::sequence));
+        private final PriorityQueue<ResponseContext> queue = new PriorityQueue<>(11, Comparator.comparingInt(ResponseContext::sequence));
         private int nextSequence = 1;
     }
 }

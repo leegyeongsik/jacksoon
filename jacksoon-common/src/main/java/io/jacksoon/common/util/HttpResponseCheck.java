@@ -2,7 +2,6 @@ package io.jacksoon.common.util;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Locale;
 
 public class HttpResponseCheck implements ResponseCheck {
 
@@ -16,7 +15,7 @@ public class HttpResponseCheck implements ResponseCheck {
         return inspect(accumulationByteBuffer, false);
     }
     @Override
-    public ResponseCheckResult eof(ByteBuffer accumulationByteBuffer) { //
+    public ResponseCheckResult eof(ByteBuffer accumulationByteBuffer) {
         return inspect(accumulationByteBuffer, true);
     }
     private void append(ByteBuffer inputByteBuffer, ByteBuffer accumulationByteBuffer) {
@@ -30,7 +29,6 @@ public class HttpResponseCheck implements ResponseCheck {
         }
         accumulationByteBuffer.put(inputByteBuffer);
     }
-
     private ResponseCheckResult inspect(ByteBuffer accumulationByteBuffer, boolean eof) {
         int totalBytes = accumulationByteBuffer.position();
         if (totalBytes == 0) {
@@ -42,9 +40,7 @@ public class HttpResponseCheck implements ResponseCheck {
         }
 
         if (!accumulationByteBuffer.hasArray()) {
-            throw new IllegalStateException(
-                    "HttpResponseCheck requires a heap ByteBuffer"
-            );
+            throw new IllegalStateException("HttpResponseCheck requires a heap ByteBuffer");
         }
 
         byte[] array = accumulationByteBuffer.array();
@@ -68,24 +64,25 @@ public class HttpResponseCheck implements ResponseCheck {
         if (headerLength > MAX_HEADER_SIZE) {
             throw new IllegalStateException("Response header too large");
         }
-        String header = new String(array, arrayStart, headerLength, StandardCharsets.US_ASCII);
-        int statusCode = parseStatusCode(header);
+        HeaderInfo headerInfo = parseHeader(array, arrayStart, headerEnd);
+        int statusCode = headerInfo.statusCode;
         if (statusCode >= 100 && statusCode < 200) {
             throw new IllegalStateException("Informational response is not supported yet: " + statusCode);
         }
-        boolean connectionClose = shouldCloseConnection(header);
 
+        boolean connectionClose = headerInfo.connectionClose || (headerInfo.http10 && !headerInfo.connectionKeepAlive);
         if (statusCode == 204 || statusCode == 304) {
             return new ResponseCheckResult(true, headerLength, headerLength, false, connectionClose);
         }
-        boolean hasTransferEncoding = hasHeader(header, "Transfer-Encoding");
-        boolean chunked = hasHeaderToken(header, "Transfer-Encoding", "chunked");
-        int contentLength = parseContentLength(header);
-        if (hasTransferEncoding && contentLength >= 0) {
+
+        if (headerInfo.hasTransferEncoding && headerInfo.contentLength >= 0) {
             throw new IllegalStateException("Both Transfer-Encoding and Content-Length are present");
         }
-        if (chunked) {
-            validateChunkedIsFinalEncoding(header);
+        if (headerInfo.chunked) {
+            if (!headerInfo.finalTransferEncodingChunked) {
+                throw new IllegalStateException("Chunked must be the final transfer encoding");
+            }
+
             int chunkedEnd = findChunkedEnd(array, absoluteHeaderEnd, arrayEnd);
             if (chunkedEnd == -1) {
                 if (eof) {
@@ -96,14 +93,14 @@ public class HttpResponseCheck implements ResponseCheck {
             int responseLength = chunkedEnd - arrayStart;
             return new ResponseCheckResult(true, responseLength, headerLength, false, connectionClose);
         }
-        if (hasTransferEncoding) {
+        if (headerInfo.hasTransferEncoding) {
             if (!eof) {
                 return new ResponseCheckResult(false, 0, headerLength, true, true);
             }
             return new ResponseCheckResult(true, totalBytes, headerLength, true, true);
         }
-        if (contentLength >= 0) {
-            long expectedLength = (long) headerLength + contentLength;
+        if (headerInfo.contentLength >= 0) {
+            long expectedLength = (long) headerLength + headerInfo.contentLength;
             if (expectedLength > MAX_RESPONSE_SIZE) {
                 throw new IllegalStateException("Response too large");
             }
@@ -119,6 +116,120 @@ public class HttpResponseCheck implements ResponseCheck {
             return new ResponseCheckResult(false, 0, headerLength, true, true);
         }
         return new ResponseCheckResult(true, totalBytes, headerLength, true, true);
+    }
+    private HeaderInfo parseHeader(byte[] array, int start, int headerEnd) {
+        HeaderInfo info = new HeaderInfo();
+        int statusLineEnd = findCrlf(array, start, headerEnd + 2);
+        if (statusLineEnd == -1) {
+            throw new IllegalStateException("Invalid HTTP status line");
+        }
+        parseStatusLine(array, start, statusLineEnd, info);
+        int lineStart = statusLineEnd + 2;
+        while (lineStart < headerEnd) {
+            int lineEnd = findCrlf(array, lineStart, headerEnd + 2);
+            if (lineEnd == -1) {
+                throw new IllegalStateException("Invalid HTTP response header");
+            }
+            if (lineEnd == lineStart) {
+                break;
+            }
+            parseHeaderLine(array, lineStart, lineEnd, info);
+            lineStart = lineEnd + 2;
+        }
+        return info;
+    }
+    private void parseStatusLine(byte[] array, int start, int end, HeaderInfo info) {
+        if (end - start < 8 || !startsWithIgnoreCase(array, start, end, "HTTP/")) {
+            throw new IllegalStateException("Invalid HTTP status line: " + asciiString(array, start, end));
+        }
+        info.http10 = startsWithIgnoreCase(array, start, end, "HTTP/1.0");
+        int position = start;
+        while (position < end && !isWhitespace(array[position])) {
+            position++;
+        }
+        while (position < end && isWhitespace(array[position])) {
+            position++;
+        }
+        int statusStart = position;
+        while (position < end && !isWhitespace(array[position])) {
+            position++;
+        }
+        if (statusStart == position) {
+            throw new IllegalStateException("Invalid HTTP status line: " + asciiString(array, start, end));
+        }
+        int statusCode = parsePositiveDecimal(array, statusStart, position);
+        if (statusCode < 100 || statusCode > 999) {
+            throw new IllegalStateException("Invalid HTTP status code: " + statusCode);
+        }
+        info.statusCode = statusCode;
+    }
+    private void parseHeaderLine(byte[] array, int start, int end, HeaderInfo info) {
+        int colon = findByte(array, start, end, (byte) ':');
+        if (colon <= start) {
+            return;
+        }
+        int nameStart = trimLeft(array, start, colon);
+        int nameEnd = trimRight(array, nameStart, colon);
+        int valueStart = trimLeft(array, colon + 1, end);
+        int valueEnd = trimRight(array, valueStart, end);
+        if (equalsIgnoreCase(array, nameStart, nameEnd, "Connection")) {
+            if (containsTokenIgnoreCase(array, valueStart, valueEnd, "close")) {
+                info.connectionClose = true;
+            }
+            if (containsTokenIgnoreCase(array, valueStart, valueEnd, "keep-alive")) {
+                info.connectionKeepAlive = true;
+            }
+            return;
+        }
+        if (equalsIgnoreCase(array, nameStart, nameEnd, "Transfer-Encoding")) {
+            info.hasTransferEncoding = true;
+            parseTransferEncoding(array, valueStart, valueEnd, info);
+            return;
+        }
+        if (equalsIgnoreCase(array, nameStart, nameEnd, "Content-Length")) {
+            parseContentLength(array, valueStart, valueEnd, info);
+        }
+    }
+    private void parseTransferEncoding(byte[] array, int start, int end, HeaderInfo info) {
+        int tokenStart = start;
+        while (tokenStart <= end) {
+            int comma = findByte(array, tokenStart, end, (byte) ',');
+            int tokenEnd = comma == -1 ? end : comma;
+            int trimmedStart = trimLeft(array, tokenStart, tokenEnd);
+            int trimmedEnd = trimRight(array, trimmedStart, tokenEnd);
+            if (trimmedStart < trimmedEnd) {
+                boolean isChunked = equalsIgnoreCase(array, trimmedStart, trimmedEnd, "chunked");
+                if (isChunked) {
+                    info.chunked = true;
+                }
+                info.finalTransferEncodingChunked = isChunked;
+            }
+            if (comma == -1) {
+                break;
+            }
+            tokenStart = comma + 1;
+        }
+    }
+    private void parseContentLength(byte[] array, int start, int end, HeaderInfo info) {
+        int valueStart = start;
+        while (valueStart <= end) {
+            int comma = findByte(array, valueStart, end, (byte) ',');
+            int valueEnd = comma == -1 ? end : comma;
+            int trimmedStart = trimLeft(array, valueStart, valueEnd);
+            int trimmedEnd = trimRight(array, trimmedStart, valueEnd);
+            if (trimmedStart >= trimmedEnd) {
+                throw new IllegalStateException("Invalid Content-Length");
+            }
+            int current = parsePositiveDecimal(array, trimmedStart, trimmedEnd);
+            if (info.contentLength >= 0 && info.contentLength != current) {
+                throw new IllegalStateException("Conflicting Content-Length values");
+            }
+            info.contentLength = current;
+            if (comma == -1) {
+                break;
+            }
+            valueStart = comma + 1;
+        }
     }
     private int findChunkedEnd(byte[] array, int bodyStart, int arrayEnd) {
         int position = bodyStart;
@@ -169,153 +280,140 @@ public class HttpResponseCheck implements ResponseCheck {
         }
         return trailerEnd + 4;
     }
-
     private long parseChunkSize(byte[] array, int start, int end) {
-        String chunkLine = new String(array, start, end - start, StandardCharsets.US_ASCII);
-        int extensionIndex = chunkLine.indexOf(';');
-        String sizeText = extensionIndex >= 0 ? chunkLine.substring(0, extensionIndex).trim() : chunkLine.trim();
-        if (sizeText.isEmpty()) {
+        int valueStart = trimLeft(array, start, end);
+        int valueEnd = trimRight(array, valueStart, end);
+        int semicolon = findByte(array, valueStart, valueEnd, (byte) ';');
+        if (semicolon != -1) {
+            valueEnd = trimRight(array, valueStart, semicolon);
+        }
+        if (valueStart >= valueEnd) {
             throw new IllegalStateException("Empty chunk size");
         }
-        for (int i = 0; i < sizeText.length(); i++) {
-            if (Character.digit(sizeText.charAt(i), 16) == -1) {
-                throw new IllegalStateException("Invalid chunk size: " + sizeText
-                );
-            }
-        }
+        long result = 0L;
+        for (int i = valueStart; i < valueEnd; i++) {
+            int digit = hexDigit(array[i]);
 
-        try {
-            long chunkSize = Long.parseLong(sizeText, 16);
-            if (chunkSize > MAX_RESPONSE_SIZE) {
+            if (digit == -1) {
+                throw new IllegalStateException("Invalid chunk size");
+            }
+            if (result > (Long.MAX_VALUE - digit) / 16) {
+                throw new IllegalStateException("Invalid chunk size");
+            }
+            result = result * 16 + digit;
+            if (result > MAX_RESPONSE_SIZE) {
                 throw new IllegalStateException("Response too large");
             }
-            return chunkSize;
-        } catch (NumberFormatException e) {
-            throw new IllegalStateException("Invalid chunk size: " + sizeText, e);
         }
+        return result;
     }
-
-    private int parseStatusCode(String header) {
-        int lineEnd = header.indexOf("\r\n");
-        String statusLine = lineEnd >= 0 ? header.substring(0, lineEnd) : header;
-        String[] parts = statusLine.trim().split("\\s+", 3);
-        if (parts.length < 2 || !parts[0].startsWith("HTTP/")) {
-            throw new IllegalStateException("Invalid HTTP status line: " + statusLine);
+    private int parsePositiveDecimal(byte[] array, int start, int end) {
+        if (start >= end) {
+            throw new IllegalStateException("Invalid decimal value");
         }
-        try {
-            int statusCode = Integer.parseInt(parts[1]);
-            if (statusCode < 100 || statusCode > 999) {
-                throw new IllegalStateException("Invalid HTTP status code: " + statusCode);
+        int result = 0;
+        for (int i = start; i < end; i++) {
+            byte current = array[i];
+            if (current < '0' || current > '9') {
+                throw new IllegalStateException("Invalid decimal value");
             }
-            return statusCode;
-        } catch (NumberFormatException e) {
-            throw new IllegalStateException("Invalid HTTP status line: " + statusLine, e
-            );
-        }
-    }
-
-    private int parseContentLength(String header) {
-        Integer parsedContentLength = null;
-        String[] lines = header.split("\r\n");
-        for (String line : lines) {
-            int colonIndex = line.indexOf(':');
-            if (colonIndex <= 0) {
-                continue;
+            int digit = current - '0';
+            if (result > (Integer.MAX_VALUE - digit) / 10) {
+                throw new IllegalStateException("Decimal value too large");
             }
-            String headerName = line.substring(0, colonIndex).trim();
-            if (!headerName.equalsIgnoreCase("Content-Length")) {
-                continue;
-            }
-            String rawValue = line.substring(colonIndex + 1).trim();
-            String[] values = rawValue.split(",");
-            for (String value : values) {
-                int current;
-
-                try {
-                    current = Integer.parseInt(value.trim());
-                } catch (NumberFormatException e) {
-                    throw new IllegalStateException("Invalid Content-Length: " + rawValue, e);
-                }
-                if (current < 0) {
-                    throw new IllegalStateException("Negative Content-Length: " + current);
-                }
-                if (parsedContentLength != null && parsedContentLength != current) {
-                    throw new IllegalStateException("Conflicting Content-Length values");
-                }
-                parsedContentLength = current;
-            }
+            result = result * 10 + digit;
         }
 
-        return parsedContentLength == null ? -1 : parsedContentLength;
+        return result;
     }
-    private boolean shouldCloseConnection(String header) {
-        if (hasHeaderToken(header, "Connection", "close")) {
-            return true;
-        }
+    private boolean containsTokenIgnoreCase(byte[] array, int start, int end, String expected) {
+        int tokenStart = start;
 
-        String statusLine = firstLine(header);
-        if (statusLine.startsWith("HTTP/1.0")) {
-            return !hasHeaderToken(header, "Connection", "keep-alive");
-        }
-        return false;
-    }
-    private void validateChunkedIsFinalEncoding(String header) {
-        String transferEncoding = findHeaderValue(header, "Transfer-Encoding");
-        if (transferEncoding == null) {
-            throw new IllegalStateException("Missing Transfer-Encoding header");
-        }
-        String[] encodings = transferEncoding.split(",");
-        String finalEncoding = encodings[encodings.length - 1].trim().toLowerCase(Locale.ROOT);
-        if (!finalEncoding.equals("chunked")) {
-            throw new IllegalStateException("Chunked must be the final transfer encoding");
-        }
-    }
+        while (tokenStart <= end) {
+            int comma = findByte(array, tokenStart, end, (byte) ',');
+            int tokenEnd = comma == -1 ? end : comma;
+            int trimmedStart = trimLeft(array, tokenStart, tokenEnd);
+            int trimmedEnd = trimRight(array, trimmedStart, tokenEnd);
 
-    private boolean hasHeader(String header, String name) {
-        return findHeaderValue(header, name) != null;
-    }
-    private boolean hasHeaderToken(String header, String headerName, String expectedToken) {
-        String headerValue = findHeaderValue(header, headerName);
-        if (headerValue == null) {
-            return false;
-        }
-        String[] tokens = headerValue.split(",");
-        for (String token : tokens) {
-            if (token.trim().equalsIgnoreCase(expectedToken)) {
+            if (equalsIgnoreCase(array, trimmedStart, trimmedEnd, expected)) {
                 return true;
             }
+
+            if (comma == -1) {
+                return false;
+            }
+            tokenStart = comma + 1;
         }
         return false;
     }
-
-    private String findHeaderValue(String header, String expectedName) {
-        String[] lines = header.split("\r\n");
-        StringBuilder result = null;
-        for (String line : lines) {
-            int colonIndex = line.indexOf(':');
-            if (colonIndex <= 0) {
-                continue;
-            }
-            String headerName = line.substring(0, colonIndex).trim();
-            if (!headerName.equalsIgnoreCase(expectedName)) {
-                continue;
-            }
-            if (result == null) {
-                result = new StringBuilder();
-            } else {
-                result.append(',');
-            }
-            result.append(line.substring(colonIndex + 1).trim());
+    private boolean startsWithIgnoreCase(byte[] array, int start, int end, String expected) {
+        if (end - start < expected.length()) {
+            return false;
         }
-        return result == null ? null : result.toString();
+        for (int i = 0; i < expected.length(); i++) {
+            if (toLowerAscii(array[start + i]) != toLowerAscii((byte) expected.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
-    private String firstLine(String header) {
-        int lineEnd = header.indexOf("\r\n");
-
-        return lineEnd == -1 ? header : header.substring(0, lineEnd);
+    private boolean equalsIgnoreCase(byte[] array, int start, int end, String expected) {
+        int length = end - start;
+        if (length != expected.length()) {
+            return false;
+        }
+        for (int i = 0; i < length; i++) {
+            if (toLowerAscii(array[start + i]) != toLowerAscii((byte) expected.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
-
+    private byte toLowerAscii(byte value) {
+        if (value >= 'A' && value <= 'Z') {
+            return (byte) (value + ('a' - 'A'));
+        }
+        return value;
+    }
+    private boolean isWhitespace(byte value) {
+        return value == ' ' || value == '\t';
+    }
+    private int trimLeft(byte[] array, int start, int end) {
+        while (start < end && isWhitespace(array[start])) {
+            start++;
+        }
+        return start;
+    }
+    private int trimRight(byte[] array, int start, int end) {
+        while (end > start && isWhitespace(array[end - 1])) {
+            end--;
+        }
+        return end;
+    }
+    private int findByte(byte[] array, int start, int end, byte expected) {
+        for (int i = start; i < end; i++) {
+            if (array[i] == expected) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    private int hexDigit(byte value) {
+        if (value >= '0' && value <= '9') {
+            return value - '0';
+        }
+        if (value >= 'a' && value <= 'f') {
+            return value - 'a' + 10;
+        }
+        if (value >= 'A' && value <= 'F') {
+            return value - 'A' + 10;
+        }
+        return -1;
+    }
+    private String asciiString(byte[] array, int start, int end) {
+        return new String(array, start, end - start, StandardCharsets.US_ASCII);
+    }
     private int findHeaderEnd(byte[] array, int start, int end) {
         for (int i = start; i <= end - 4; i++) {
             if (array[i] == '\r' && array[i + 1] == '\n' && array[i + 2] == '\r' && array[i + 3] == '\n') {
@@ -331,5 +429,15 @@ public class HttpResponseCheck implements ResponseCheck {
             }
         }
         return -1;
+    }
+    private static final class HeaderInfo {
+        private int statusCode;
+        private boolean http10;
+        private boolean connectionClose;
+        private boolean connectionKeepAlive;
+        private boolean hasTransferEncoding;
+        private boolean chunked;
+        private boolean finalTransferEncodingChunked;
+        private int contentLength = -1;
     }
 }

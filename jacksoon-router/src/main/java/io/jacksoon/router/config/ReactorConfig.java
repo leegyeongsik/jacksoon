@@ -5,6 +5,7 @@ import io.jacksoon.common.handler.AcceptHandler;
 import io.jacksoon.common.handler.Handler;
 import io.jacksoon.common.handler.IOStore;
 import io.jacksoon.common.handler.RequestSubmitter;
+import io.jacksoon.common.selector.SelectorManager;
 import io.jacksoon.router.connection.client.ClientConnectionManager;
 import io.jacksoon.router.connection.client.ClientConnectionPolicy;
 import io.jacksoon.common.selector.Reactor;
@@ -21,11 +22,6 @@ import java.nio.channels.ServerSocketChannel;
 public class ReactorConfig {
     @Init("clientSelector")
     public Selector clientSelector() throws IOException {
-        return Selector.open();
-    }
-
-    @Init("backendSelector")
-    public Selector backendSelector() throws IOException {
         return Selector.open();
     }
 
@@ -57,7 +53,10 @@ public class ReactorConfig {
     public ClientConnectionManager clientConnectionManager(ClientConnectionPolicy connectionPolicy) {
         return new ClientConnectionManager(connectionPolicy);
     }
-
+    @Init
+    public SelectorManager selectorManager(ExceptionDispatcher exceptionDispatcher){
+        return new SelectorManager(exceptionDispatcher);
+    }
     @Init("clientReactor")
     public Reactor clientReactor(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, @Init("acceptHandler") Handler handler, ExceptionDispatcher exceptionDispatcher, RouterProperties properties) throws Exception {
         Reactor reactor = new Reactor(selector, exceptionDispatcher);
@@ -69,10 +68,5 @@ public class ReactorConfig {
     @Init("acceptHandler")
     public Handler acceptHandler(@Init("clientSelector") Selector selector, @Init("clientServerSocket") ServerSocketChannel serverSocketChannel, HttpRequestCheck check, RequestSubmitter submitter, IOStore ioStore, ClientConnectionManager connectionManager) {
         return new AcceptHandler(selector, serverSocketChannel, check, submitter, ioStore, connectionManager);
-    }
-
-    @Init("backendReactor")
-    public Reactor backendReactor(@Init("backendSelector") Selector selector, ExceptionDispatcher exceptionDispatcher) throws Exception {
-        return new Reactor(selector, exceptionDispatcher);
     }
 }

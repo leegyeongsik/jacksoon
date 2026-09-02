@@ -30,6 +30,13 @@ public abstract class NioConnectionHandler implements Handler, AutoCloseable {
         key.interestOps(ops);
         selector.wakeup();
     }
+    protected void setInterestOpsNoWakeup(int ops) {
+        SelectionKey key = selectionKey;
+        if (key == null || !key.isValid()) {
+            return;
+        }
+        key.interestOps(ops);
+    }
     @Override
     public void close() {
         SelectionKey key = selectionKey;

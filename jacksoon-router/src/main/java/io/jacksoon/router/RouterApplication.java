@@ -3,13 +3,13 @@ package io.jacksoon.router;
 import io.jacksoon.common.produce.dto.ProduceDto;
 import io.jacksoon.common.produce.worker.ProduceWorker;
 import io.jacksoon.common.selector.Reactor;
+import io.jacksoon.common.selector.SelectorManager;
 import io.jacksoon.common.util.CommonWorkerPool;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.router.worker.*;
 
 @Init
 public class RouterApplication {
-    private final Reactor backendReactor;
     private final Reactor clientReactor;
     private final CommonWorkerPool<RouterPipelineWorker> routerWorkerPool;
     private final CommonWorkerPool<RegistryCheckWorker> registryCheckWorkerPool;
@@ -24,9 +24,8 @@ public class RouterApplication {
     private final CommonWorkerPool<ClientConnectionMonitorWorker> warmClientConnectionMonitorPool;
     private final CommonWorkerPool<ClientConnectionMonitorWorker> hotClientConnectionMonitorPool;
     private final CommonWorkerPool<ClientConnectionCloseWorker> clientConnectionClosePool;
-
-    public RouterApplication(@Init("backendReactor") Reactor backendReactor,
-                             @Init("clientReactor") Reactor clientReactor,
+    private final SelectorManager selectorManager;
+    public RouterApplication(@Init("clientReactor") Reactor clientReactor,
                              @Init("coldClientConnectionMonitorPool") CommonWorkerPool<ClientConnectionMonitorWorker> coldClientConnectionMonitorPool,
                              @Init("warmClientConnectionMonitorPool") CommonWorkerPool<ClientConnectionMonitorWorker> warmClientConnectionMonitorPool,
                              @Init("hotClientConnectionMonitorPool") CommonWorkerPool<ClientConnectionMonitorWorker> hotClientConnectionMonitorPool,
@@ -39,8 +38,7 @@ public class RouterApplication {
                              CommonWorkerPool<FilterWorker> filterWorkerPool,
                              CommonWorkerPool<ProduceWorker<ProduceDto>> produceDtoPool,
                              CommonWorkerPool<ReRoutingWorker> reRoutingPool,
-                             CommonWorkerPool<ClientConnectionCloseWorker> clientConnectionClosePool) {
-        this.backendReactor = backendReactor;
+                             CommonWorkerPool<ClientConnectionCloseWorker> clientConnectionClosePool, SelectorManager selectorManager) {
         this.clientReactor = clientReactor;
         this.routerWorkerPool = routerWorkerPool;
         this.registryCheckWorkerPool = registryCheckWorkerPool;
@@ -55,11 +53,12 @@ public class RouterApplication {
         this.warmClientConnectionMonitorPool = warmClientConnectionMonitorPool;
         this.hotClientConnectionMonitorPool = hotClientConnectionMonitorPool;
         this.clientConnectionClosePool = clientConnectionClosePool;
+        this.selectorManager = selectorManager;
     }
 
     public void start() {
+        selectorManager.init(2);
         new Thread(clientReactor, "client-reactor").start();
-        new Thread(backendReactor, "backend-reactor").start();
 
         routerWorkerPool.start();
         registryCheckWorkerPool.start();
