@@ -4,8 +4,8 @@ import io.jacksoon.common.exception.ExceptionDispatcher;
 import io.jacksoon.common.produce.dto.ProduceDto;
 import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.router.exception.RouterMetricException;
-import io.jacksoon.router.produce.dto.ServiceMetric;
-import io.jacksoon.router.produce.dto.ServiceRequest;
+import io.jacksoon.router.produce.metric.ServiceMetricStore;
+import io.jacksoon.router.produce.metric.ServiceMetricStore.ServiceMetricSnapshot;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -13,15 +13,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ProduceMetricWorker implements Runnable {
-    private final Map<String, ServiceMetric> serviceMetricMap = new HashMap<>();
-    private final CommonBlockingQueue<ServiceRequest> metricQueue;
+
+    private final long FLUSH_INTERVAL_MILLIS;
+    private final ServiceMetricStore metricStore;
     private final CommonBlockingQueue<ProduceDto> produceDtoQueue;
-    private final long MAXIMUM_SIZE = 500;
-    private final Constructor<?> constructor;
     private final ExceptionDispatcher exceptionDispatcher;
-    long cnt;
-    public ProduceMetricWorker(CommonBlockingQueue<ServiceRequest> metricQueue, CommonBlockingQueue<ProduceDto> produceDtoQueue, Class<?> clazz, ExceptionDispatcher exceptionDispatcher) {
-        this.metricQueue = metricQueue;
+    private final Constructor<?> constructor;
+    private final Map<String, LastMetric> lastMetricMap = new HashMap<>();
+    public ProduceMetricWorker(ServiceMetricStore metricStore, CommonBlockingQueue<ProduceDto> produceDtoQueue, Class<?> clazz, ExceptionDispatcher exceptionDispatcher,long flushIntervalMillis) {
+        FLUSH_INTERVAL_MILLIS = flushIntervalMillis;
+        this.metricStore = metricStore;
         this.produceDtoQueue = produceDtoQueue;
         this.exceptionDispatcher = exceptionDispatcher;
         try {
@@ -36,47 +37,47 @@ public class ProduceMetricWorker implements Runnable {
         try {
             while (!Thread.currentThread().isInterrupted()) {
                 try {
-                    ServiceRequest serviceRequest = metricQueue.poll();
-                    if (serviceRequest != null) {
-                        Do(serviceRequest);
-                    }
-                    boolean empty = serviceRequest == null;
-                    boolean size = cnt >= MAXIMUM_SIZE;
-                    if (empty || size) {
-                        DODO();
-                    }
+                    Thread.sleep(FLUSH_INTERVAL_MILLIS);
+                    flush();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
                 } catch (Exception e) {
                     exceptionDispatcher.dispatch(e);
                 }
             }
         } finally {
             try {
-                DODO();
+                flush();
             } catch (Exception e) {
                 exceptionDispatcher.dispatch(e);
             }
         }
     }
 
-    private void DODO() {
-        for (String serviceName : serviceMetricMap.keySet()) {
-            ServiceMetric serviceMetric = serviceMetricMap.get(serviceName);
-            if (serviceMetric.success != 0 || serviceMetric.failure != 0) {
-                try {
-                    produceDtoQueue.put((ProduceDto) constructor.newInstance(serviceName, serviceMetric.getSuccess(), serviceMetric.getFailure()));
-                } catch (InstantiationException | InvocationTargetException | IllegalAccessException e) {
-                    throw new RouterMetricException("Failed to create metric dto. serviceName=" + serviceName, e);
-                }
+    private void flush() {
+        for (ServiceMetricSnapshot snapshot : metricStore.snapshot()) {
+            LastMetric last = lastMetricMap.computeIfAbsent(snapshot.serviceName(), ignored -> new LastMetric());
+            long success = snapshot.success() - last.success;
+            long failure = snapshot.failure() - last.failure;
+            if (success == 0 && failure == 0) {
+                continue;
             }
+            ProduceDto produceDto = createProduceDto(snapshot.serviceName(), success, failure);
+            produceDtoQueue.put(produceDto);
+            last.success = snapshot.success();
+            last.failure = snapshot.failure();
         }
-        serviceMetricMap.clear();
-        cnt = 0;
     }
-
-    void Do(ServiceRequest serviceRequest) {
-        serviceMetricMap.putIfAbsent(serviceRequest.getServiceName(), new ServiceMetric(0, 0));
-        ServiceMetric serviceMetric = serviceMetricMap.get(serviceRequest.getServiceName());
-        serviceMetric.update(serviceRequest.isSuccess);
-        cnt += 1;
+    private ProduceDto createProduceDto(String serviceName, long success, long failure) {
+        try {
+            return (ProduceDto) constructor.newInstance(serviceName, success, failure);
+        } catch (InstantiationException | InvocationTargetException | IllegalAccessException e) {
+            throw new RouterMetricException("Failed to create metric dto. serviceName=" + serviceName, e);
+        }
+    }
+    private static final class LastMetric {
+        private long success;
+        private long failure;
     }
 }

@@ -7,14 +7,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ProxyContext {
     public final SelectionKey clientKey;
     public final ByteBuffer requestBuffer;
-    public final ByteBuffer readBuffer;
     public ByteBuffer responseBuffer;
     public final AtomicInteger current;
 
     public ProxyContext(ByteBuffer requestBuffer, SelectionKey clientKey, AtomicInteger current) {
         this.requestBuffer = requestBuffer;
         this.current = current;
-        this.readBuffer = ByteBuffer.allocate(8 * 1024);
         this.responseBuffer = ByteBuffer.allocate(8 * 1024);
         this.clientKey = clientKey;
     }

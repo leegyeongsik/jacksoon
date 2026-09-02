@@ -4,11 +4,10 @@ import io.jacksoon.common.filter.FilterContext;
 import io.jacksoon.common.filter.FilterRegistryKey;
 import io.jacksoon.common.filter.FilterTiming;
 import io.jacksoon.common.filter.PipelineType;
-import io.jacksoon.common.util.CommonBlockingQueue;
 import io.jacksoon.init.annotation.Init;
 import io.jacksoon.router.exception.RouterFilterExecutionException;
 import io.jacksoon.router.pipeline.context.RouterPipelineContext;
-import io.jacksoon.router.produce.dto.ServiceRequest;
+import io.jacksoon.router.produce.metric.ServiceMetricStore;
 
 import java.io.IOException;
 import java.net.URLClassLoader;
@@ -18,11 +17,11 @@ import java.util.Objects;
 
 @Init
 public class FilterRegistry {
-    private final CommonBlockingQueue<ServiceRequest> filterMetricQueue;
+    private final ServiceMetricStore serviceMetricStore;
     private volatile LoadedFilterBundle current = new LoadedFilterBundle(0L, null, null, Map.of());
 
-    public FilterRegistry(@Init("filterMetricQueue") CommonBlockingQueue<ServiceRequest> filterMetricQueue) {
-        this.filterMetricQueue = filterMetricQueue;
+    public FilterRegistry(@Init("filterMetricStore") ServiceMetricStore serviceMetricStore) {
+        this.serviceMetricStore = serviceMetricStore;
     }
 
     public List<RegisteredFilter> get(FilterTiming timing, PipelineType pipeline) {
@@ -42,9 +41,9 @@ public class FilterRegistry {
                     continue;
                 }
                 filter.filter().doFilter(filterContext);
-                filterMetricQueue.put(new ServiceRequest(filter.config().filterName(), true));
+                serviceMetricStore.success(filter.config().filterName());
             } catch (Exception e) {
-                filterMetricQueue.put(new ServiceRequest(filter.config().filterName(), false));
+                serviceMetricStore.failure(filter.config().filterName());
                 throw new RouterFilterExecutionException("Filter execution failed. filter=" + filter.config().filterName(), e);
             }
         }

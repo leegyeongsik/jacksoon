@@ -21,6 +21,7 @@ import io.jacksoon.router.pipeline.executor.router.ReRoutingContext;
 import io.jacksoon.router.produce.dto.FilterMetricProduceDto;
 import io.jacksoon.router.produce.dto.RouterMetricProduceDto;
 import io.jacksoon.router.produce.dto.ServiceRequest;
+import io.jacksoon.router.produce.metric.ServiceMetricStore;
 import io.jacksoon.router.worker.*;
 
 @Init
@@ -71,13 +72,13 @@ public class WorkerPoolConfig {
     }
 
     @Init("serviceMetricPool")
-    public CommonWorkerPool<ProduceMetricWorker> produceMetricPool(@Init("serviceMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue, CommonBlockingQueue<ProduceDto> produceDtoQueue, ExceptionDispatcher exceptionDispatcher) {
-        return new CommonWorkerPool<>(5, () -> new ProduceMetricWorker(serviceRequestQueue, produceDtoQueue, RouterMetricProduceDto.class, exceptionDispatcher));
+    public CommonWorkerPool<ProduceMetricWorker> produceMetricPool(@Init("serviceMetricStore") ServiceMetricStore serviceMetricStore, CommonBlockingQueue<ProduceDto> produceDtoQueue, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new ProduceMetricWorker(serviceMetricStore,produceDtoQueue, RouterMetricProduceDto.class, exceptionDispatcher,10000L));
     }
 
     @Init("filterMetricPool")
-    public CommonWorkerPool<ProduceMetricWorker> filterMetricPool(@Init("filterMetricQueue") CommonBlockingQueue<ServiceRequest> serviceRequestQueue, CommonBlockingQueue<ProduceDto> produceDtoQueue, ExceptionDispatcher exceptionDispatcher) {
-        return new CommonWorkerPool<>(1, () -> new ProduceMetricWorker(serviceRequestQueue, produceDtoQueue, FilterMetricProduceDto.class, exceptionDispatcher));
+    public CommonWorkerPool<ProduceMetricWorker> filterMetricPool(@Init("filterMetricStore")ServiceMetricStore serviceMetricStore, CommonBlockingQueue<ProduceDto> produceDtoQueue, ExceptionDispatcher exceptionDispatcher) {
+        return new CommonWorkerPool<>(1, () -> new ProduceMetricWorker(serviceMetricStore,produceDtoQueue, FilterMetricProduceDto.class, exceptionDispatcher,10000L));
     }
 
     @Init

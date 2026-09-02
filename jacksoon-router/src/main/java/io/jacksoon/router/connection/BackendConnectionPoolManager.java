@@ -6,11 +6,12 @@ import io.jacksoon.init.annotation.Init;
 import io.jacksoon.router.connection.factory.BackendConnectionFactory;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Init
 public class BackendConnectionPoolManager {
     private final BackendConnectionFactory connectionFactory;
-    private final Map<String, BackendServicePoolGroup> servicePoolMap = new HashMap<>();
+    private final Map<String, BackendServicePoolGroup> servicePoolMap = new ConcurrentHashMap<>();
 
     public BackendConnectionPoolManager(BackendConnectionFactory connectionFactory) {
         this.connectionFactory = connectionFactory;
@@ -35,24 +36,25 @@ public class BackendConnectionPoolManager {
 
     private void removeDeadServices(Set<String> liveServices) {
         List<String> remove = new ArrayList<>();
-        for (String s : servicePoolMap.keySet()) {
-            if (!liveServices.contains(s)) {
-                remove.add(s);
+        for (String serviceName : servicePoolMap.keySet()) {
+            if (!liveServices.contains(serviceName)) {
+                remove.add(serviceName);
             }
         }
-        for (String s : remove) {
-            BackendServicePoolGroup backendServicePoolGroup = servicePoolMap.remove(s);
-            if (backendServicePoolGroup != null) {
-                backendServicePoolGroup.close();
+        for (String serviceName : remove) {
+            BackendServicePoolGroup group = servicePoolMap.remove(serviceName);
+
+            if (group != null) {
+                group.close();
             }
         }
     }
 
-    public synchronized BackendServicePoolGroup select(String serviceName) {
+    public BackendServicePoolGroup select(String serviceName) {
         return servicePoolMap.get(serviceName);
     }
 
-    public synchronized void maintain() {
+    public void maintain() {
         for (BackendServicePoolGroup group : servicePoolMap.values()) {
             group.maintain();
         }
