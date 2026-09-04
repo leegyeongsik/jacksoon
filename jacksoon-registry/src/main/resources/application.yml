@@ -2,4 +2,4 @@ server:
   port: 1013
 
 console:
-  baseUrl: http://localhost:1014
+  baseUrl: http://console:1014
