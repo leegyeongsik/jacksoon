@@ -3,6 +3,7 @@ package io.jacksoon.registry.connection.store;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jacksoon.common.registry.dto.response.RegistrySnapshot;
 import io.jacksoon.init.annotation.Init;
+import io.jacksoon.registry.config.RegistryProperties;
 import io.jacksoon.registry.exception.RegistryConsoleSyncException;
 
 import java.net.URI;
@@ -14,10 +15,11 @@ import java.net.http.HttpResponse;
 public class ConsoleRegistryClient {
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final ObjectMapper objectMapper;
-    private final String snapshotUrl = "http://localhost:1014/registry/snapshot";
+    private final String snapshotUrl;
 
-    public ConsoleRegistryClient(ObjectMapper objectMapper) {
+    public ConsoleRegistryClient(ObjectMapper objectMapper, RegistryProperties properties) {
         this.objectMapper = objectMapper;
+        this.snapshotUrl = properties.console().baseUrl() + "/registry/snapshot";
     }
 
     public RegistrySnapshot snapshot() {

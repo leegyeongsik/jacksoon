@@ -2,7 +2,7 @@ server:
   port: 1011
 
 console:
-  baseUrl: http://localhost:1014
+  baseUrl: http://console:1014
 
 directory:
   work: plugins/work

@@ -1,0 +1,179 @@
+name: jacksoon
+
+services:
+
+  # =========================================================
+  # PostgreSQL
+  # =========================================================
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jacksoon_console}
+      POSTGRES_USER: ${POSTGRES_USER:-jacksoon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    volumes:
+      - postgres-data:/var/lib/postgresql
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+
+  # =========================================================
+  # 1. Console
+  # =========================================================
+  console:
+    image: ghcr.io/${GHCR_OWNER}/jacksoon-console:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jacksoon_console}
+      DB_USERNAME: ${POSTGRES_USER:-jacksoon}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DDL: ${DDL:-update}
+
+    command:
+      - java
+      - -jar
+      - /app/app.jar
+
+    volumes:
+      - metric-data:/app/metric
+
+    ports:
+      - "127.0.0.1:1014:1014"
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:1014/actuator/health/readiness || exit 1"
+        ]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
+
+
+  # =========================================================
+  # 2. Filter Management
+  # =========================================================
+  filter-management:
+    image: ghcr.io/${GHCR_OWNER}/jacksoon-filter-management:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+    depends_on:
+      console:
+        condition: service_healthy
+
+    command:
+      - java
+      - -cp
+      - /app/app.jar:/app/lib/*
+      - io.jacksoon.filterManagement.Main
+
+    volumes:
+      - filter-work:/app/plugins/work
+      - filter-bundles:/app/plugins/bundles
+
+    ports:
+      - "127.0.0.1:1011:1011"
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c '</dev/tcp/127.0.0.1/1011'"
+        ]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
+
+
+  # =========================================================
+  # 3. Registry
+  # =========================================================
+  registry:
+    image: ghcr.io/${GHCR_OWNER}/jacksoon-registry:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+    depends_on:
+      filter-management:
+        condition: service_healthy
+
+    command:
+      - java
+      - -cp
+      - /app/app.jar:/app/lib/*
+      - io.jacksoon.registry.Main
+
+    ports:
+      - "127.0.0.1:1013:1013"
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c '</dev/tcp/127.0.0.1/1013'"
+        ]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
+
+
+  # =========================================================
+  # 4. Router
+  # =========================================================
+  router:
+    image: ghcr.io/${GHCR_OWNER}/jacksoon-router:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+    depends_on:
+      registry:
+        condition: service_healthy
+
+    command:
+      - java
+      - -cp
+      - /app/app.jar:/app/lib/*
+      - io.jacksoon.router.Main
+
+    volumes:
+      - metric-data:/app/metric
+
+    ports:
+      - "1012:1012"
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c '</dev/tcp/127.0.0.1/1012'"
+        ]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+      start_period: 10s
+
+
+volumes:
+  postgres-data:
+  metric-data:
+  filter-work:
+  filter-bundles:
