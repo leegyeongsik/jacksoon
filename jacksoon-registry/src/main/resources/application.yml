@@ -1,0 +1,5 @@
+server:
+  port: 1013
+
+console:
+  baseUrl: http://console:1014

@@ -1,0 +1,13 @@
+server:
+  port: 1012
+  backlog: 512
+
+registry:
+  baseUrl: http://registry:1013
+
+filter:
+  baseUrl: http://filter-management:1011
+  bundleDirectory: plugins/filter-bundles
+
+metric:
+  directory: /app/metric

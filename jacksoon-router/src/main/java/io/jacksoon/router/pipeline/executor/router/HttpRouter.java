@@ -1,0 +1,43 @@
+package io.jacksoon.router.pipeline.executor.router;
+
+import io.jacksoon.init.annotation.Init;
+import io.jacksoon.router.pipeline.context.ProxyContext;
+import io.jacksoon.router.pipeline.context.RouterPipelineContext;
+import io.jacksoon.router.pipeline.executor.depth.RouterDepth;
+
+import java.nio.ByteBuffer;
+
+@Init
+public class HttpRouter implements RouterDepth {
+    private final FindRouter findRouter;
+    private final HttpRequestRewriter requestRewriter;
+
+    public HttpRouter(FindRouter findRouter, HttpRequestRewriter requestRewriter) {
+        this.findRouter = findRouter;
+        this.requestRewriter = requestRewriter;
+    }
+
+    @Override
+    public void dodo(RouterPipelineContext context) {
+        // 여기서 라우터에서 찐빠난 예외
+        RoutingTarget target = findRouter.find(context.getRequest());
+
+        ByteBuffer backendRequestBuffer = requestRewriter.rewritePath(
+                context.getByteBuffer(),
+                context.getRequest().getMethod(),
+                target.backendPath(),
+                context.getRequest().getVersion()
+        );
+        target.backendServicePoolGroup().send(new ProxyContext(backendRequestBuffer, context.getSelectionKey(),context.getCurrent()));
+    }
+
+    @Override
+    public String currentEvent() {
+        return "router";
+    }
+
+    @Override
+    public String nextEvent() {
+        return null;
+    }
+}
